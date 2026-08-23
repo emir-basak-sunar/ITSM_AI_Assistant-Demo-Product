@@ -83,9 +83,10 @@ def _debug(classification: dict, sentiment: dict, action: str, extra: dict | Non
 
 
 def _with_llm_reply(result: TurnResult, customer_text: str) -> TurnResult:
-    if not llm_enabled():
+    # Solutions and opened tickets already have rich, complete formatting
+    if result.phase in {"suggest_solution", "ticket_open", "report_queued"}:
         return result
-    if len((customer_text or "").strip()) < 12:
+    if not llm_enabled() or len((customer_text or "").strip()) < 12:
         return result
     from llm_analyze import rewrite_customer_reply
 
@@ -164,12 +165,8 @@ def _suggest_reply(classification: dict, hits: list[dict], user_text: str = "") 
     path = path_line(classification)
     blocks = [f"🔍 **Talebinizi şöyle sınıflandırdım:** {path}"]
     if hits:
-        blocks.append("💡 **Geçmiş Çözüm Kayıtlarından AI Önerisi:**")
-        blocks.extend(format_solution(row, user_text=user_text) for row in hits)
-        blocks.append(
-            "Bu adımlar işinize yaradıysa belirtebilirsiniz. Eğer sorun devam ediyorsa veya kayıt açmamı isterseniz "
-            "**“talep aç”** demeniz yeterli; eksik bilgileri tamamlayıp kaydınızı oluşturacağım."
-        )
+        for row in hits:
+            blocks.append(format_solution(row, user_text=user_text))
     else:
         blocks.append(
             "Bu süreç için hazır bir self-service çözüm kaydı bulunamadı. İlgili birime bilet oluşturmamı ister misiniz?"

@@ -10,15 +10,28 @@ ITSM AI Asistanı — Ethereal Botanical Glassmorphism Edition
 
 import base64
 import html
-import json
-import re
 import importlib
+import json
+import os
+import re
+import sys
 from pathlib import Path
+
+# Add src to python path for guaranteed clean module resolution
+SRC_DIR = Path(__file__).resolve().parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 import streamlit as st
 
+import llm_engine
 import solutions
+import orchestrator
+importlib.reload(llm_engine)
 importlib.reload(solutions)
+importlib.reload(orchestrator)
+
+from llm_engine import is_llm_active
 from orchestrator import handle_turn
 from reports import build_unit_summary, load_jobs, run_queued_jobs
 from solutions import (
@@ -505,15 +518,17 @@ def _reset_chat():
 # -------------------------------------------------------------
 # Top Hero Header (Floating Island)
 # -------------------------------------------------------------
+llm_badge = "✨ Gemini LLM Aktif" if is_llm_active() else "🌿 Hibrit Sistem Aktif"
+
 st.markdown(
-    """
+    f"""
 <div class="hero-island">
   <div>
     <h1 class="hero-title">ITSM AI Asistanı & Yönetici Kokpiti</h1>
-    <p class="hero-subtitle">Doğal Dil Anlama · ITIL Çözüm Önerisi · Dinamik Veri Tamamlama · 4 Kademeli Taksonomi · Günlük Rapor JOB</p>
+    <p class="hero-subtitle">Doğal Dil Anlama · Gemini AI Çözüm Sentezi · Dinamik Veri Tamamlama · 4 Kademeli Taksonomi · Günlük Rapor JOB</p>
   </div>
   <div style="display:flex; align-items:center; gap:0.5rem;">
-    <span class="badge-online">🌿 Sistem Aktif</span>
+    <span class="badge-online">{llm_badge}</span>
   </div>
 </div>
 """,

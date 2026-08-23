@@ -158,7 +158,6 @@ def synthesize_solution_explanation(user_text: str, row: dict) -> str:
     birim_label = row.get("birim_label", "Destek")
     
     # Contextual insight generator
-    context_note = ""
     if "siyah" in lowered or "goruntu" in lowered or "ekran" in lowered:
         context_note = "Belirttiğiniz siyah ekran/görüntü kesintisi genellikle güç besleme veya statik elektrik kaynaklıdır."
     elif "yavas" in lowered or "donuyor" in lowered or "kasiyor" in lowered:
@@ -176,6 +175,27 @@ def synthesize_solution_explanation(user_text: str, row: dict) -> str:
 
 
 def format_solution(row: dict, user_text: str = "") -> str:
+    title = row.get("title") or row.get("surec_label") or "Çözüm Kaydı"
+    sid = row.get("id") or ""
+    self_service = " · Self-Service Çözüm" if row.get("self_service_uygun_mu") else ""
+    
+    stats = get_solution_stats(sid)
+    rating_badge = f"⭐ {stats['rating_display']}"
+
+    # Try LLM Engine first if active (Gemini / Groq)
+    try:
+        from llm_engine import synthesize_ai_troubleshooting
+        llm_text = synthesize_ai_troubleshooting(user_text, row) if user_text else None
+        if llm_text:
+            return (
+                f"**💡 {title} (Yapay Zeka Destekli Çözüm)**\n\n"
+                f"{llm_text}\n\n"
+                f"*(Kayıt No: `{sid}` · {rating_badge}{self_service})*"
+            )
+    except Exception:
+        pass
+
+    # Fallback to smart built-in synthesis
     steps = row.get("steps") or []
     if isinstance(steps, str):
         body = steps
@@ -184,16 +204,8 @@ def format_solution(row: dict, user_text: str = "") -> str:
             step if step.startswith(("1.", "2.", "3.", "4.", "5.")) else f"{i}. {step}"
             for i, step in enumerate(steps, start=1)
         )
-    title = row.get("title") or row.get("surec_label") or "Çözüm Kaydı"
-    sid = row.get("id") or ""
-    self_service = " · Self-Service Çözüm" if row.get("self_service_uygun_mu") else ""
-    
-    stats = get_solution_stats(sid)
-    rating_badge = f"⭐ {stats['rating_display']}"
-
-    # Option A: Contextual dynamic AI explanation
+        
     ai_insight = synthesize_solution_explanation(user_text, row)
-    
     return (
         f"**💡 {title}**\n"
         f"*{ai_insight}*\n\n"

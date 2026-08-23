@@ -111,58 +111,39 @@ thread:
         "handoff_notes": notes,
     }
 
-def _is_faithful(canned: str, rewritten: str, min_sim: float = 0.4) -> bool:
-    """True if paraphrase stays close to the canned rule text."""
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    from nlu_engine import _artifacts
-
-    vectorizer, _ = _artifacts()
-    if vectorizer is None:
+def _is_faithful(canned: str, rewritten: str, min_sim: float = 0.3) -> bool:
+    """True if paraphrase stays close to the canned text."""
+    c_words = set(re.findall(r"\w+", canned.lower()))
+    r_words = set(re.findall(r"\w+", rewritten.lower()))
+    if not c_words or not r_words:
         return True
-    try:
-        matrix = vectorizer.transform([canned, rewritten])
-        sim = float(cosine_similarity(matrix[0:1], matrix[1:2])[0, 0])
-    except (ValueError, OSError):
-        return True
-    return sim >= min_sim
+    overlap = len(c_words & r_words) / max(len(c_words), 1)
+    return overlap >= min_sim
+
 
 def rewrite_customer_reply(
     *,
     canned_reply: str,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> str | None:
-    """Rewrite the already-decided reply. None = keep the canned text."""
+    """Rewrite the already-decided reply using Gemini / LLM. None = keep the canned text."""
     canned_reply = (canned_reply or "").strip()
     if not canned_reply:
         return None
 
-    prompt = f"""
-Paraphrase the text below into more natural Turkish.
-Keep the same meaning and every step and fact (including any ticket id).
-Do not add information, questions, apologies, or commentary.
-Do not mention rewriting, templates, or rules.
-Output only the paraphrased message. No markdown.
+    try:
+        from llm_engine import generate_llm_response
+        prompt = f"""
+Aşağıdaki kurumsal yanıtı anlamını ve içindeki bilet ID, basamak ve kritik bilgileri %100 koruyarak daha akıcı ve profesyonel Türkçe ile yeniden ifade et.
+Hiçbir bilgi ekleme, çıkarma. Sadece metni döndür.
 
-Text:
+Metin:
 {canned_reply}
 """.strip()
+        text = generate_llm_response(prompt)
+        if text and _is_faithful(canned_reply, text):
+            return text.strip()
+    except Exception:
+        pass
 
-    payload = {
-        "model": DEFAULT_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.1},
-    }
-    try:
-        response = requests.post(DEFAULT_URL, json=payload, timeout=timeout)
-        response.raise_for_status()
-        text = str(response.json().get("response", "")).strip()
-    except (requests.RequestException, json.JSONDecodeError, ValueError, OSError):
-        return None
-
-    text = re.sub(r"^```(?:\w+)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text).strip()
-    if not text or not _is_faithful(canned_reply, text):
-        return None
-    return text
+    return None
