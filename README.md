@@ -1,51 +1,63 @@
-# ITSM Asistanı
+# ITSM AI Asistanı & Yönetici Portalı
 
-ITSM / ticket chatbot prototipi. Kullanıcı doğal dille yazar; asistan **sınıflandırır**, geçmiş **çözüm kayıtlarından** önerir, eksik alanları tamamlar, ticket açar. Rapor komutları kuyruğa alınır, günlük JOB ile birim özeti üretilir.
+Toplantı gereksinimlerine göre sıfırdan modernize edilmiş, 4 kademeli kurumsal ITSM sınıflandırması, ITIL çözüm önerisi (RAG), dinamik veri tamamlama (Slot Filling), ve otomatik günlük raporlama JOB motorunu içeren yapay zeka destekli ilk kademe destek asistanı.
 
-Canlı ServiceNow yoktur. Kayıtlar JSONL.
+---
 
-Ayrıntı: `PRD.md`, `ARCHITECTURE.md`, `TODO.md`, `TERMS.md`.
+## 🎯 Projenin 5 Temel Fonksiyonu
 
-## Ne yapar
-1. Talebi anlama (gerekirse netleştirme)
-2. Çözüm kaydı önerme (`data/solutions.jsonl`)
-3. Ticket alanlarını tamamlama (varlık, konum, etki)
-4. Sınıf: Talep → Birim → Modül → Süreç (önce anahtar kelime, belirsizse küçük TF-IDF model; eğitim `data/itsm_siniflandirma.csv` + şablonlar)
-5. Rapor komutu + `python src/daily_jobs.py`
+1. **Talebi Anlama & Netleştirme:**
+   - Kullanıcının doğal dilde yazdığı talepleri anlar.
+   - Belirsiz/muğlak durumlarda (*"Bir sorunum var"*, *"Sistem çalışmıyor"*) akıllı takip sorularıyla talebi netleştirir.
 
-## Kurulum
+2. **AI ile Çözüm Üretme & Yorumlama (Self-Service / RAG):**
+   - 27 kurumsal süreç için ITIL standartlarında hazırlanmış geçmiş çözüm kayıtlarından faydalanır.
+   - Kullanıcıya adım adım uygulanabilir çözüm önerileri sunar. Çözüm işe yararsa bileti kapatır (Self-Service Deflection).
+
+3. **Veri Tamamlama (Dynamic Slot Filling):**
+   - Bilet açılışı öncesinde ilgili sürece özel zorunlu parametreleri (Varlık, Lokasyon, Etki, Hata Kodu, Fatura No, Sicil No vb.) kullanıcıdan toplayarak eksiksiz veriyle bilet oluşturur.
+
+4. **4 Kademeli Hiyerarşik Sınıflandırma:**
+   - **Talep Türü** (*Arıza / Hizmet Talebi / Bilgi Talebi*)
+   - **Birim** (*Bilgi Teknolojileri / İdari İşler / İnsan Kaynakları / Finans*)
+   - **Modül** (*Donanım, Ağ, Yazılım, Güvenlik, Sunucu, Ofis Ekipmanı, Tesis, Ulaşım, Bordro, İzin, Masraf*)
+   - **Süreç / Talep Tipi** (*27 Farklı Süreç*)
+   - Öncelik / Aciliyet Seviyesi (*Kritik / Yüksek / Orta / Düşük*)
+
+5. **Raporlama & Günlük JOB Süreçleri:**
+   - Doğal dille verilen rapor komutlarını kuyruğa alır.
+   - Günlük arka plan JOB'ı (`python src/daily_jobs.py` veya UI üzerinden tek tıkla) ile birim bazlı analitik özet raporlar üretip ilgili birimlere iletir.
+
+---
+
+## 🚀 Hızlı Başlangıç
+
+### 1. Ortam ve Bağımlılıklar
 ```powershell
 python -m venv .asude
 .\.asude\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-## Asistanı çalıştır
+### 2. Modeli Eğitme ve Test Etme
+```powershell
+# 27 sınıflı NLU modelini eğitir (%94.7+ doğruluk)
+python src\train_itsm_nlu.py
+
+# 13 senaryolu uçtan uca diyalog testlerini çalıştırır
+python src\eval_dialogues.py
+```
+
+### 3. Uygulamayı Başlatma
 ```powershell
 streamlit run src\app.py
 ```
 
-Yönetici: `admin@reportly.local` / `AdminReportly1!`
+---
 
-### Demo
-```
-Bilgisayarım bozuldu, talep açmak istiyorum.
-```
-Sınıf + çözüm + eksik alan soruları, sonra ticket.
+## 💻 Canlı Demo Senaryoları
 
-```
-Laptopum açılmıyor, ekran siyah.
-```
-Önce çözüm kaydı; “işe yaradı” dersen kayıt açılmaz.
-
-```
-Açık taleplerin raporunu hazırla, günlük özet istiyorum.
-```
-Sonra: `python src\daily_jobs.py`
-
-```powershell
-python src\train_itsm_nlu.py
-python src\eval_dialogues.py
-```
-
-İsteğe bağlı LLM (`ASSISTANT_USE_LLM=1`). Kararı orchestrator verir.
+1. **Çözüm Önerme (Donanım):** `"Laptopum açılmıyor, ekran siyah."` $\rightarrow$ AI çözüm adımları sunar $\rightarrow$ `"İşe yaradı teşekkürler"` ile self-service kapanır.
+2. **Dinamik Veri Tamamlama:** `"VPN bağlanamıyorum, talep aç"` $\rightarrow$ Eksik alanlar sorulur $\rightarrow$ Bilet oluşturulur.
+3. **Muğlak Talep Netleştirme:** `"Bir sorunum var yardımcı olur musun"` $\rightarrow$ AI takip sorusu sorarak netleştirir.
+4. **Günlük Raporlama:** `"Açık taleplerin raporunu hazırla, günlük özet istiyorum"` $\rightarrow$ Kuyruğa alınır $\rightarrow$ `python src/daily_jobs.py` ile çalıştırılır.

@@ -1,0 +1,330 @@
+{
+  "toner_kartus_talebi": {
+    "surec_label": "Toner/Kartuş Talebi",
+    "birim_label": "İdari İşler",
+    "modul_label": "Ofis Ekipmanı",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "yazici_lokasyon",
+      "yazici_marka_model",
+      "toner_kartus_kodu"
+    ],
+    "netlestirme_sorusu": "Yazıcının marka ve modeli nedir, doğru toner kodunu belirleyebilmemiz için gerekli?"
+  },
+  "kirtasiye_malzeme_talebi": {
+    "surec_label": "Kırtasiye Malzeme Talebi",
+    "birim_label": "İdari İşler",
+    "modul_label": "Satınalma/Malzeme",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "malzeme_listesi_miktar",
+      "departman",
+      "teslimat_lokasyonu"
+    ],
+    "netlestirme_sorusu": "Hangi malzemelerden ne miktarda ihtiyacınız var, liste hâlinde belirtebilir misiniz?"
+  },
+  "sunucu_servis_kesintisi": {
+    "surec_label": "Sunucu/Servis Kesintisi",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Sunucu/Sistem",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "etkilenen_sistem_adi",
+      "baslangic_saati",
+      "etkilenen_kullanici_sayisi",
+      "hata_ekran_goruntusu"
+    ],
+    "netlestirme_sorusu": "Sistem tamamen erişilemez durumda mı, yoksa bazı işlemler yapılabiliyor ama yavaş mı çalışıyor?"
+  },
+  "klima_isitma_arizasi": {
+    "surec_label": "Klima/Isıtma Arızası",
+    "birim_label": "İdari İşler",
+    "modul_label": "Bina/Tesis Bakım",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "lokasyon_kat_oda",
+      "klima_cihaz_no"
+    ],
+    "netlestirme_sorusu": "Klima hiç çalışmıyor mu yoksa çalışıyor ama yeterince soğutmuyor/ısıtmıyor mu?"
+  },
+  "kayip_giris_karti": {
+    "surec_label": "Kayıp Giriş Kartı",
+    "birim_label": "İdari İşler",
+    "modul_label": "Güvenlik & Ulaşım",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "personel_sicil_no",
+      "kart_kayip_tarihi_yeri",
+      "departman"
+    ],
+    "netlestirme_sorusu": "Kartınızı ne zaman ve nerede kaybettiğinizi hatırlıyor musunuz? Güvenlik kaydı için gerekli olacak."
+  },
+  "yazici_fotokopi_ariza_bildirimi": {
+    "surec_label": "Yazıcı/Fotokopi Arıza Bildirimi",
+    "birim_label": "İdari İşler",
+    "modul_label": "Ofis Ekipmanı",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "yazici_lokasyon",
+      "yazici_marka_model",
+      "hata_kodu"
+    ],
+    "netlestirme_sorusu": "Yazıcıda bir hata kodu veya ışık uyarısı görünüyor mu, görünüyorsa nedir?"
+  },
+  "yeni_kullanici_hesabi": {
+    "surec_label": "Yeni Kullanıcı Hesabı",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Güvenlik ve Erişim",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "ad_soyad",
+      "departman_pozisyon",
+      "baslangic_tarihi",
+      "yonetici_adi"
+    ],
+    "netlestirme_sorusu": "Kullanıcı için standart erişim paketi mi yeterli, yoksa ek özel sistem/uygulama erişimleri de gerekiyor mu?"
+  },
+  "i̇zin_i̇ptal_degisiklik": {
+    "surec_label": "İzin İptal/Değişiklik",
+    "birim_label": "İnsan Kaynakları",
+    "modul_label": "İzin Yönetimi",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "personel_sicil_no",
+      "izin_tarih_araligi",
+      "iptal_degisiklik_nedeni"
+    ],
+    "netlestirme_sorusu": "İptal etmek veya değiştirmek istediğiniz izninizin tarih aralığı nedir?"
+  },
+  "veritabani_erisim_hatasi": {
+    "surec_label": "Veritabanı Erişim Hatası",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Sunucu/Sistem",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "uygulama_adi",
+      "hata_mesaji",
+      "erisim_zamani",
+      "kullanici_adi"
+    ],
+    "netlestirme_sorusu": "Bu hatayı sadece siz mi alıyorsunuz, yoksa aynı raporu kullanan diğer ekip arkadaşlarınız da mı yaşıyor?"
+  },
+  "monitor_cevre_birimi_arizasi": {
+    "surec_label": "Monitör/Çevre Birimi Arızası",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Donanım",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "cihaz_seri_no",
+      "ofis_lokasyon",
+      "cihaz_marka_model"
+    ],
+    "netlestirme_sorusu": "Cihaz hiç açılmıyor mu (ışık yanmıyor) yoksa açılıyor ama görüntü/sinyal mi gelmiyor?"
+  },
+  "bilgisayar_ariza_onarim": {
+    "surec_label": "Bilgisayar Arıza/Onarım",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Donanım",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "cihaz_etiket_no",
+      "ofis_lokasyon",
+      "hata_ekran_goruntusu",
+      "sorunun_baslangic_zamani"
+    ],
+    "netlestirme_sorusu": "Bilgisayarınız hiç açılmıyor mu, yoksa açılıp belirli bir noktada mı donuyor/kapanıyor?"
+  },
+  "vpn_erisim_sorunu": {
+    "surec_label": "VPN Erişim Sorunu",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Ağ/Network",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "kullanici_adi",
+      "hata_kodu_mesaji",
+      "kullanilan_cihaz_turu",
+      "internet_saglayici"
+    ],
+    "netlestirme_sorusu": "VPN'e bağlanırken aldığınız hata mesajını veya hata kodunu paylaşabilir misiniz?"
+  },
+  "sifre_sifirlama": {
+    "surec_label": "Şifre Sıfırlama",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Güvenlik ve Erişim",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "kullanici_adi_sicil_no",
+      "kimlik_dogrulama_bilgisi",
+      "erisim_sistemi"
+    ],
+    "netlestirme_sorusu": "Şifresini sıfırlamak istediğiniz sistem hangisi (Windows/AD, e-posta, SAP vb.)?"
+  },
+  "avans_talebi": {
+    "surec_label": "Avans Talebi",
+    "birim_label": "Finans",
+    "modul_label": "Masraf & Ödeme",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "talep_tutari",
+      "seyahat_gorev_amaci",
+      "yonetici_onayi",
+      "odeme_hesap_bilgisi"
+    ],
+    "netlestirme_sorusu": "Talep ettiğiniz avans tutarı ve seyahat/görev tarihleri nedir?"
+  },
+  "masraf_harcama_formu_onayi": {
+    "surec_label": "Masraf/Harcama Formu Onayı",
+    "birim_label": "Finans",
+    "modul_label": "Masraf & Ödeme",
+    "talep_turu_label": "Bilgi Talebi (Information)",
+    "zorunlu_alanlar": [
+      "personel_sicil_no",
+      "masraf_formu_no",
+      "harcama_tarihi"
+    ],
+    "netlestirme_sorusu": "Masraf formunuzun onay/form numarasını veya oluşturduğunuz tarihi paylaşabilir misiniz?"
+  },
+  "sistem_klasor_yetki_talebi": {
+    "surec_label": "Sistem/Klasör Yetki Talebi",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Güvenlik ve Erişim",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "klasor_sistem_adi",
+      "erisim_seviyesi",
+      "yonetici_onayi"
+    ],
+    "netlestirme_sorusu": "Talep ettiğiniz klasöre/sisteme okuma mı yoksa yazma/düzenleme yetkisi mi gerekiyor?"
+  },
+  "fatura_odeme_takibi": {
+    "surec_label": "Fatura Ödeme Takibi",
+    "birim_label": "Finans",
+    "modul_label": "Masraf & Ödeme",
+    "talep_turu_label": "Bilgi Talebi (Information)",
+    "zorunlu_alanlar": [
+      "fatura_no",
+      "tedarikci_adi",
+      "fatura_tutari"
+    ],
+    "netlestirme_sorusu": "Sorguladığınız faturanın numarasını veya tedarikçi firma adını paylaşabilir misiniz?"
+  },
+  "servis_guzergah_talebi": {
+    "surec_label": "Servis Güzergah Talebi",
+    "birim_label": "İdari İşler",
+    "modul_label": "Güvenlik & Ulaşım",
+    "talep_turu_label": "Bilgi Talebi (Information)",
+    "zorunlu_alanlar": [
+      "guzergah_adi",
+      "talep_turu_bilgi_degisiklik"
+    ],
+    "netlestirme_sorusu": "Mevcut servis saatlerini mi öğrenmek istiyorsunuz, yoksa güzergahta bir durak değişikliği mi talep ediyorsunuz?"
+  },
+  "yeni_ekipman_kurulumu": {
+    "surec_label": "Yeni Ekipman Kurulumu",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Donanım",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "yeni_calisan_adi",
+      "departman",
+      "baslangic_tarihi",
+      "ofis_lokasyon"
+    ],
+    "netlestirme_sorusu": "Talep edilen ekipman sadece dizüstü bilgisayar mı, yoksa monitör ve çevre birimleri de dahil mi?"
+  },
+  "ozluk_calisma_belgesi_talebi": {
+    "surec_label": "Özlük/Çalışma Belgesi Talebi",
+    "birim_label": "İnsan Kaynakları",
+    "modul_label": "Bordro & Özlük",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "personel_sicil_no",
+      "belge_kullanim_amaci",
+      "teslim_yontemi"
+    ],
+    "netlestirme_sorusu": "Belgeyi e-posta ile (e-imzalı) mi almak istersiniz, yoksa ıslak imzalı elden teslim mi tercih edersiniz?"
+  },
+  "wi-fi_baglanti_sorunu": {
+    "surec_label": "Wi-Fi Bağlantı Sorunu",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Ağ/Network",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "lokasyon_oda_no",
+      "cihaz_turu",
+      "sorunun_sikligi"
+    ],
+    "netlestirme_sorusu": "Bu sorun sadece belirli bir odada/katta mı yaşanıyor, yoksa ofis genelinde mi?"
+  },
+  "yazilim_lisans_kurulum_talebi": {
+    "surec_label": "Yazılım Lisans/Kurulum Talebi",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Yazılım",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "yazilim_adi_versiyon",
+      "kullanim_amaci",
+      "yonetici_onayi",
+      "cihaz_etiket_no"
+    ],
+    "netlestirme_sorusu": "Hangi yazılımın hangi sürümüne ihtiyacınız var ve ne amaçla kullanacaksınız?"
+  },
+  "elektrik_aydinlatma_arizasi": {
+    "surec_label": "Elektrik/Aydınlatma Arızası",
+    "birim_label": "İdari İşler",
+    "modul_label": "Bina/Tesis Bakım",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "lokasyon_kat_oda",
+      "etkilenen_alan_buyuklugu",
+      "baslangic_saati"
+    ],
+    "netlestirme_sorusu": "Sorun tüm ofiste/katta mı yoksa sadece belirli bir masada/odada mı yaşanıyor?"
+  },
+  "uygulama_hatasi_outlook_teams_excel_vb": {
+    "surec_label": "Uygulama Hatası (Outlook/Teams/Excel vb.)",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Yazılım",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "uygulama_adi",
+      "hata_mesaji_tam_metni",
+      "son_calisma_zamani"
+    ],
+    "netlestirme_sorusu": "Hangi uygulamada (Outlook/Teams/Excel/SAP) hangi işlemi yaparken hata alıyorsunuz?"
+  },
+  "ofis_mobilya_degisimi": {
+    "surec_label": "Ofis Mobilya Değişimi",
+    "birim_label": "İdari İşler",
+    "modul_label": "Satınalma/Malzeme",
+    "talep_turu_label": "Hizmet Talebi (Service Request)",
+    "zorunlu_alanlar": [
+      "mobilya_turu",
+      "lokasyon_kat_oda",
+      "hasar_aciklamasi"
+    ],
+    "netlestirme_sorusu": "Hasarlı mobilyanın türü nedir ve hasarın boyutunu gösteren bir fotoğraf paylaşabilir misiniz?"
+  },
+  "i̇nternet_baglanti_sorunu": {
+    "surec_label": "İnternet Bağlantı Sorunu",
+    "birim_label": "Bilgi Teknolojileri",
+    "modul_label": "Ağ/Network",
+    "talep_turu_label": "Arıza (Incident)",
+    "zorunlu_alanlar": [
+      "etkilenen_lokasyon_kat",
+      "etkilenen_kisi_sayisi",
+      "baslangic_saati"
+    ],
+    "netlestirme_sorusu": "Bu internet kesintisi sadece sizin cihazınızda mı yoksa kattaki diğer kişilerde de var mı?"
+  },
+  "yillik_i̇zin_talebi_bakiye_sorgulama": {
+    "surec_label": "Yıllık İzin Talebi/Bakiye Sorgulama",
+    "birim_label": "İnsan Kaynakları",
+    "modul_label": "İzin Yönetimi",
+    "talep_turu_label": "Bilgi Talebi (Information)",
+    "zorunlu_alanlar": [
+      "personel_sicil_no"
+    ],
+    "netlestirme_sorusu": "Sadece kalan izin bakiyenizi mi öğrenmek istiyorsunuz, yoksa yeni bir izin talebi mi oluşturmak istiyorsunuz?"
+  }
+}

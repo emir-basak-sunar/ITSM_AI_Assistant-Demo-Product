@@ -1,26 +1,19 @@
-# Product Requirements — ITSM Asistanı
+# Product Requirements Document (PRD) — ITSM AI Asistanı
 
-Repo: `nlu-insight-lab`. Product: **ITSM Asistanı**, an AI-supported first-line chatbot on a demo ITSM/ticket process.
+## 1. Ürün Özeti
+**ITSM AI Asistanı**, kurum içi servis yönetiminde kullanıcıların doğal dilde ilettiği talepleri karşılayan, 4 kademeli taksonomi ile sınıflandıran, geçmiş çözüm kayıtlarından (KB) self-service çözümler öneren, eksik alanları tamamlayarak bilet açan ve zamanlanmış analitik raporlama JOB süreçlerini yürüten ilk kademe yapay zeka destekli bir asistandır.
 
-## 1. Overview
-The user describes a request in natural language. The bot classifies it as **Talep → Birim → Modül → Süreç/Talep tipi**, offers matching past **solution records**, collects missing ticket fields, then opens a structured ticket. Reporting commands are queued for a daily JOB.
+## 2. Toplantı Gereksinimleri & Kapsam
 
-There is **no** live ServiceNow/Jira. Tickets are JSONL. Solutions are a seeded knowledge file.
+| # | Modül / Gereksinim | Açıklama |
+|---|---|---|
+| 1 | **Talebi Anlama & Netleştirme** | Kullanıcının doğal dil talebini anlama; muğlak ifadelerde bağlama uygun akıllı takip sorularıyla netleştirme. |
+| 2 | **AI ile Çözüm Üretme & Yorumlama** | Geçmiş ITSM çözüm kayıtlarından (Knowledge Base) faydalanarak adım adım self-service çözümler sunma. |
+| 3 | **Veri Tamamlama (Dynamic Slots)** | Bilet açılışı öncesinde kategoriye özel zorunlu alanları (Varlık, Lokasyon, Etki, Hata Kodu, Fatura No vb.) kullanıcıdan toplama. |
+| 4 | **4 Kademeli Talep Sınıflandırma** | *Talep Türü → Birim → Modül → Süreç/Talep Tipi* ve Öncelik/SLA belirleme (BT, İdari İşler, İK, Finans). |
+| 5 | **Raporlama & Günlük JOB Süreçleri** | Chatbot üzerinden verilen rapor komutlarını kuyruğa alma, günlük JOB ile çalıştırma ve özetleri iletme. |
 
-## 2. Personas
-- **Employee / requester:** Opens incidents and service requests in chat.
-- **ITSM admin:** Reads the classified queue and report JOB output.
-
-## 3. Current prototype
-
-1. **Talebi anlama** — keyword taxonomy first; if unclear, a small TF-IDF + logistic regression classifier; clarify when still unsure.
-2. **Çözüm önerme** — retrieve from `data/solutions.jsonl` (past ITSM solution records).
-3. **Veri tamamlama** — required fields: varlık, konum, etki.
-4. **Sınıflandırma** — 4-level path, shown in the bubble meta and on the ticket.
-5. **Raporlama** — “rapor / günlük özet / açık talepler” queues a job; `python src/daily_jobs.py` writes the unit summary.
-
-## 4. Out of scope
-Live CMDB, real mail gateways, ServiceNow APIs, marketplace returns.
-
-## 5. Success
-Demo sentences: laptop arızası → çözüm; “talep aç” → alanlar → ticket; belirsiz metin → netleştirme; rapor komutu → kuyruk.
+## 3. Başarı Kriterleri
+- 27 sınıf genelinde `%94+` NLU sınıflandırma doğruluğu.
+- Uçtan uca tüm diyalog senaryolarının (`eval_dialogues.py`) hatasız geçmesi.
+- Anlaşılır, estetik ve işlevsel Streamlit arayüzü & yönetici kokpiti.

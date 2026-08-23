@@ -170,6 +170,52 @@ DIALOGUES = [
             }
         ],
     },
+    {
+        "name": "10_klima_cozum",
+        "turns": [
+            {
+                "text": "4. kat klima çok gürültü yapıyor ve soğutmuyor.",
+                "action": "suggest_solution",
+            }
+        ],
+    },
+    {
+        "name": "11_kart_kayip",
+        "turns": [
+            {
+                "text": "Giriş kartımı kaybettim, acil talep aç",
+                "action": "collect_fields",
+            },
+            {
+                "text": "Maslak Ofis 3. kat yalnız ben",
+                "action": "ticket_open",
+            }
+        ],
+        "ticket_count": 1,
+    },
+    {
+        "name": "12_avans_talebi",
+        "turns": [
+            {
+                "text": "İş seyahati için avans talep ediyorum, talep aç",
+                "action": "collect_fields",
+            },
+            {
+                "text": "İstanbul Merkez Ofis 1500 TL yalnız ben",
+                "action": "ticket_open",
+            }
+        ],
+        "ticket_count": 1,
+    },
+    {
+        "name": "13_izin_sorgu",
+        "turns": [
+            {
+                "text": "Kaç gün yıllık izin hakkım kaldı?",
+                "action": "suggest_solution",
+            }
+        ],
+    },
 ]
 
 

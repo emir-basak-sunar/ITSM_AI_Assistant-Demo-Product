@@ -1,367 +1,184 @@
 """
-ITSM Asistanı — Streamlit UI
-Run from the project root:
-    streamlit run src/app.py
+ITSM AI Asistanı — Ethereal Botanical Glassmorphism Edition
+Özel 5 Renk Paleti (Nordic Botanical Harmony):
+  • #1D2A62 (Delft Blue - Derinlik ve Vurgular)
+  • #87AECE (Carolina Blue - İpeksi Gökyüzü Mavisi)
+  • #F5F3D8 (Beige - Sıcak Aydınlık Işık Hüzmesi & Metinler)
+  • #AFD06E (Pistachio - Işıltılı Fıstık Yeşili)
+  • #437118 (Fern Green - Zengin Botanik Taban)
 """
 
 import base64
 import html
+import json
 import re
+import importlib
 from pathlib import Path
 
 import streamlit as st
 
+import solutions
+importlib.reload(solutions)
 from orchestrator import handle_turn
-from tickets import load_tickets
+from reports import build_unit_summary, load_jobs, run_queued_jobs
+from solutions import (
+    get_feedback_analytics,
+    get_solution_stats,
+    load_solutions,
+    record_feedback,
+)
+from taxonomy import PATHS
+from tickets import load_tickets, update_status
 
 ROOT = Path(__file__).resolve().parent.parent
 
-
-def _brand_font_face() -> str:
-    path = ROOT / "assets" / "fonts" / "Calfinedemo.otf"
-    if not path.exists():
-        return ""
-    payload = base64.b64encode(path.read_bytes()).decode("ascii")
-    return (
-        "@font-face {"
-        '  font-family: "Calfine";'
-        f"  src: url(data:font/otf;base64,{payload}) format('opentype');"
-        "  font-weight: 400;"
-        "  font-style: normal;"
-        "  font-display: swap;"
-        "}"
-    )
-
-
 st.set_page_config(
-    page_title="ITSM Asistanı",
-    page_icon="✦",
+    page_title="ITSM AI Asistanı",
+    page_icon="✨",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 WELCOME_MESSAGE = (
-    "Merhaba, ben ITSM asistanın. "
-    "Talebini doğal dille yaz; sınıflandırır, varsa çözüm kaydı öneririm, "
-    "gerekirse eksik alanları tamamlayıp ticket açarım.\n\n"
-    "Örneğin: *Bilgisayarım bozuldu, talep açmak istiyorum.*"
+    "👋 **Merhaba, ben Kurumsal ITSM Yapay Zeka Asistanınız.**\n\n"
+    "Talebinizi doğal dilde iletebilirsiniz:\n"
+    "• **Talebinizi anlar ve sınıflandırırım** (*Talep → Birim → Modül → Süreç*)\n"
+    "• **Geçmiş çözümlerden faydalanarak çözüm öneririm** (Self-Service)\n"
+    "• **Eksik alanları diyalogla tamamlayıp bilet açarım**\n"
+    "• **Raporlama komutlarınızı kuyruğa alıp günlük JOB olarak çalıştırırım.**\n\n"
+    "Örnek: *“Bilgisayarım bozuldu, talep açmak istiyorum”* veya *“VPN bağlanamıyorum”*"
 )
 
-CUSTOM_CSS = """
+# -------------------------------------------------------------
+# Ethereal Botanical Glassmorphism CSS (Hyper-Polished)
+# -------------------------------------------------------------
+ETHEREAL_BOTANICAL_CSS = """
 <style>
-""" + _brand_font_face() + """
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@1,700&family=Figtree:ital,wght@0,400;0,500;0,600;0,650;1,300;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap');
 
 :root {
-  --olive-deep: #4D5A2E;
-  --olive: #5E5C2D;
-  --moss: #8A8C41;
-  --sage: #999A57;
-  --mustard: #C4BA65;
-  --sand: #C8B891;
-  --peach: #E1A794;
-  --apricot: #FEC67C;
-  --orange: #FC9C51;
-  --blush: #F9BDB0;
-  --salmon: #E9767F;
-  --mauve: #A16A84;
-  --cream: #F3EBE0;
-  --paper: #F3EBE0;
-  --ink: #F4EAD4;
-  --muted: #D5C9A8;
-  --panel-radius: 22px;
+  --delft-blue: #1D2A62;
+  --carolina-blue: #87AECE;
+  --carolina-light: #B8D5ED;
+  --beige: #F5F3D8;
+  --beige-glow: rgba(245, 243, 216, 0.85);
+  --pistachio: #AFD06E;
+  --pistachio-bright: #C7EE7B;
+  --fern-green: #437118;
+  
+  --glass-bg: rgba(29, 42, 98, 0.32);
+  --glass-bg-subtle: rgba(245, 243, 216, 0.08);
+  --glass-border: rgba(245, 243, 216, 0.22);
+  --glass-border-light: rgba(255, 255, 255, 0.55);
+  
+  --text-pure: #FFFFFF;
+  --text-cream: #F5F3D8;
+  --text-carolina: #CFE4F6;
+  --text-muted: rgba(245, 243, 216, 0.72);
+  
+  --card-radius: 22px;
 }
 
 html, body, [class*="css"] {
-  font-family: "Figtree", sans-serif;
-  color: var(--ink);
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
+  color: var(--text-cream);
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  min-height: 100vh;
-  box-sizing: border-box;
-}
-
-html, body, .stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stHeader"],
-section.main {
-  background: transparent !important;
-}
-
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"],
-section.main,
-.stMain {
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
+/* Ethereal Prism Sunbeam & Botanical Mesh Background */
 .stApp {
-  color: var(--ink);
-  background-color: #B7A56E !important;
+  background-color: #1F2D57 !important;
+  background-image: 
+    radial-gradient(ellipse 65% 45% at 55% -4%, rgba(255, 255, 255, 0.75) 0%, rgba(245, 243, 216, 0.58) 35%, transparent 68%),
+    radial-gradient(ellipse 70% 60% at 20% 36%, rgba(175, 208, 110, 0.48) 0%, transparent 58%),
+    radial-gradient(ellipse 75% 65% at 85% 26%, rgba(135, 174, 206, 0.55) 0%, transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 92%, rgba(67, 113, 24, 0.58) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 12% 82%, rgba(29, 42, 98, 0.8) 0%, transparent 62%) !important;
+  background-attachment: fixed !important;
 }
 
-.stApp::before {
-  content: "";
-  position: fixed;
-  inset: -28%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 42% 36% at 18% 28%, #C96B2A 0%, transparent 62%),
-    radial-gradient(ellipse 38% 42% at 82% 18%, #C45A64 0%, transparent 60%),
-    radial-gradient(ellipse 46% 40% at 72% 78%, #8A8340 0%, transparent 64%),
-    radial-gradient(ellipse 40% 34% at 12% 82%, #5E5C2D 0%, transparent 58%),
-    radial-gradient(ellipse 36% 38% at 48% 48%, #C48B7A 0%, transparent 55%),
-    radial-gradient(ellipse 30% 28% at 58% 12%, #D4A45A 0%, transparent 52%),
-    radial-gradient(ellipse 28% 32% at 38% 88%, #7D5268 0%, transparent 58%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, #A67C68 0%, transparent 70%);
-  filter: blur(56px) saturate(1.12);
-  animation: plasma-drift 22s ease-in-out infinite;
-}
-
-.stApp::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(255,255,255,.12), transparent 42%),
-    radial-gradient(circle at 80% 70%, rgba(77, 90, 46, .18), transparent 46%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
-  opacity: 0.38;
-  mix-blend-mode: overlay;
-  animation: mist-shift 18s ease-in-out infinite;
-}
-
-@keyframes plasma-drift {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
-  35%  { transform: translate(5%, -4%) rotate(9deg) scale(1.08); }
-  60%  { transform: translate(-4%, 5%) rotate(-7deg) scale(1.04); }
-  100% { transform: translate(0, 0) rotate(0deg) scale(1); }
-}
-
-@keyframes mist-shift {
-  0%, 100% { opacity: 0.38; }
-  50% { opacity: 0.55; }
-}
-
-header[data-testid="stHeader"],
-header.stAppHeader,
-[data-testid="stDecoration"],
-[data-testid="stToolbar"],
-[data-testid="stStatusWidget"],
-.stDeployButton,
-div[data-testid="stMain"] > div[data-testid="stHeader"] {
+header[data-testid="stHeader"] {
   display: none !important;
-  height: 0 !important;
 }
 
-#MainMenu, footer { visibility: hidden; }
-
-/* Streamlit container temizlikleri */
-[data-testid="stElementContainer"]:has(style),
-.stElementContainer:has(style) {
-  display: none !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
+.block-container {
+  padding: 1.4rem 2rem 2.2rem !important;
+  max-width: 1520px !important;
 }
 
-section.main, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
-  padding-top: 0 !important;
-}
-
-.block-container,
-[data-testid="stMainBlockContainer"],
-.stMainBlockContainer {
-  position: relative;
-  z-index: 1;
-  padding: 1.8rem clamp(1.4rem, 4vw, 3.2rem) 1.8rem !important;
-  max-width: 1360px !important;
-  margin: 0 auto !important;
-  box-sizing: border-box !important;
-}
-
-/* Başlık Alanı */
-.page-head {
-  margin: 0 0 1.35rem 0 !important;
-  text-align: left;
-}
-
-.page-title {
-  font-family: "Bodoni Moda", serif !important;
-  font-style: italic !important;
-  font-weight: 700 !important;
-  font-size: clamp(2.4rem, 5vw, 3.6rem) !important;
-  line-height: 1.08;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--paper);
-  margin: 0 !important;
-  text-shadow: 0 4px 18px rgba(77, 90, 46, 0.35);
-}
-
-.page-sub {
-  margin: 0.45rem 0 0 0 !important;
-  color: var(--paper);
-  opacity: 0.88;
-  font-family: "Figtree", sans-serif;
-  font-style: italic;
-  font-size: 1.02rem;
-  font-weight: 300;
-  line-height: 1.5;
-  letter-spacing: 0.01em;
-  max-width: 52rem;
-}
-
-/* Kolon ve Panel Düzeni */
-[data-testid="stHorizontalBlock"] {
-  gap: 1.4rem !important;
-  align-items: stretch !important;
-}
-
-/* Sol Panel Header Wrapper (Yeni Sohbet Butonu İçeren Satır) */
-[data-testid="stHorizontalBlock"]:has(.st-key-btn_new_chat) {
-  background: rgba(31, 36, 18, 0.25) !important;
-  border: 1px solid rgba(246, 239, 224, 0.28) !important;
-  border-bottom: 1px solid rgba(246, 239, 224, 0.16) !important;
-  border-radius: var(--panel-radius) var(--panel-radius) 0 0 !important;
-  padding: 0.5rem 1.15rem !important;
-  margin: 0 !important;
-  align-items: center !important;
-  min-height: 3.5rem !important;
-  box-sizing: border-box !important;
-  backdrop-filter: blur(22px) saturate(1.35) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.35) !important;
-}
-
-[data-testid="stHorizontalBlock"]:has(.st-key-btn_new_chat) [data-testid="column"] {
-  display: flex !important;
-  align-items: center !important;
-}
-
-[data-testid="stHorizontalBlock"]:has(.st-key-btn_new_chat) [data-testid="column"]:last-child {
-  justify-content: flex-end !important;
-}
-
-/* Sağ Panel Üst Başlık Çubuğu */
-.panel-bar-standalone {
+/* Hero Header (Ethereal Floating Island) */
+.hero-island {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1.15rem;
-  background: rgba(31, 36, 18, 0.25);
-  border: 1px solid rgba(246, 239, 224, 0.28);
-  border-bottom: 1px solid rgba(246, 239, 224, 0.16);
-  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
-  min-height: 3.5rem;
-  box-sizing: border-box;
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding: 1.2rem 1.8rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-top: 1.5px solid var(--glass-border-light);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4), 0 20px 48px rgba(13, 21, 54, 0.35);
 }
 
-.panel-bar-left {
+.hero-title {
+  font-size: 1.95rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F5F3D8 35%, #87AECE 75%, #AFD06E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 !important;
+  text-shadow: 0 4px 24px rgba(245, 243, 216, 0.25);
+}
+
+.hero-subtitle {
+  color: var(--text-carolina);
+  font-size: 0.9rem;
+  font-weight: 400;
+  margin: 0.25rem 0 0 0;
+  letter-spacing: 0.01em;
+}
+
+.badge-online {
+  font-size: 0.78rem;
+  background: rgba(175, 208, 110, 0.25);
+  border: 1.2px solid rgba(175, 208, 110, 0.6);
+  color: #E2F5B4;
+  padding: 0.4rem 0.95rem;
+  border-radius: 99px;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  box-shadow: 0 0 20px rgba(175, 208, 110, 0.3);
+  backdrop-filter: blur(12px);
 }
 
-.panel-glyph {
-  color: var(--apricot);
-  font-size: 1.1rem;
-  text-shadow: 0 0 12px rgba(254, 198, 124, 0.7);
-}
-
-.panel-title {
-  font-family: "Bodoni Moda", serif;
-  font-style: italic;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 1.02rem;
-  color: var(--paper);
-}
-
-.panel-sub {
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-/* Yeni Sohbet Butonu (Beyaz Arka Plan, Sağ Üst) */
-div[data-testid="stElementContainer"]:has(.st-key-btn_new_chat),
-.st-key-btn_new_chat {
-  display: flex !important;
-  justify-content: flex-end !important;
-  align-items: center !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-.st-key-btn_new_chat div.stButton > button,
-div[data-testid="stElementContainer"]:has(.st-key-btn_new_chat) button {
-  background: #FFFFFF !important;
-  color: #4D5A2E !important;
-  border: 1px solid rgba(246, 239, 224, 0.8) !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  letter-spacing: 0.02em !important;
-  padding: 0.35rem 0.95rem !important;
-  border-radius: 10px !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16) !important;
-  transition: all 0.2s ease !important;
-  min-height: 2.15rem !important;
-  height: 2.15rem !important;
-  white-space: nowrap !important;
-}
-
-.st-key-btn_new_chat div.stButton > button:hover,
-div[data-testid="stElementContainer"]:has(.st-key-btn_new_chat) button:hover {
-  background: #F6EFE0 !important;
-  color: #38431e !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24) !important;
-}
-
-/* Chat İçerik Alanı */
-.chat-thread {
-  height: calc(100vh - 21.2rem);
-  min-height: 400px;
-  overflow-x: hidden;
+/* Chat Thread Glass Container */
+.chat-container {
+  height: 520px;
   overflow-y: auto;
-  padding: 1.1rem 1.15rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  scroll-behavior: smooth;
-  border-left: 1px solid rgba(246, 239, 224, 0.28);
-  border-right: 1px solid rgba(246, 239, 224, 0.28);
-  background: linear-gradient(
-    165deg,
-    rgba(94, 92, 45, 0.62) 0%,
-    rgba(77, 90, 46, 0.52) 55%,
-    rgba(61, 70, 32, 0.58) 100%
-  );
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  gap: 1.05rem;
+  border: 1px solid var(--glass-border);
+  border-top: 1.5px solid var(--glass-border-light);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--card-radius) var(--card-radius) 0 0;
+  background: rgba(24, 34, 76, 0.38);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25);
 }
 
-.chat-thread::-webkit-scrollbar,
-.tickets-thread::-webkit-scrollbar {
-  width: 7px;
+.chat-container::-webkit-scrollbar {
+  width: 5px;
 }
-
-.chat-thread::-webkit-scrollbar-thumb,
-.tickets-thread::-webkit-scrollbar-thumb {
-  background: linear-gradient(#C4BA65, #FC9C51);
+.chat-container::-webkit-scrollbar-thumb {
+  background: rgba(135, 174, 206, 0.5);
   border-radius: 99px;
 }
 
@@ -369,297 +186,226 @@ div[data-testid="stElementContainer"]:has(.st-key-btn_new_chat) button:hover {
   display: flex;
   width: 100%;
 }
-
-.bubble-row.user {
-  justify-content: flex-end;
-}
-
-.bubble-row.assistant {
-  justify-content: flex-start;
-}
+.bubble-row.user { justify-content: flex-end; }
+.bubble-row.assistant { justify-content: flex-start; }
 
 .bubble {
-  max-width: min(88%, 32rem);
-  padding: 0.9rem 1.15rem;
-  border-radius: 18px;
-  line-height: 1.5;
+  max-width: 85%;
+  padding: 1rem 1.3rem;
+  border-radius: 20px;
   font-size: 0.93rem;
-  box-shadow: 0 4px 14px rgba(31, 36, 18, 0.16);
+  line-height: 1.6;
   word-break: break-word;
 }
 
 .bubble.user {
-  background: linear-gradient(135deg, #FC9C51 0%, #E9767F 58%, #A16A84 140%);
-  color: var(--paper);
+  background: linear-gradient(135deg, #1D2A62 0%, #26387A 55%, #437118 135%);
+  color: #F5F3D8;
+  border: 1px solid rgba(135, 174, 206, 0.45);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.35);
   border-bottom-right-radius: 4px;
-  box-shadow: 0 8px 20px rgba(233, 118, 127, 0.28);
+  box-shadow: 0 10px 28px rgba(15, 25, 60, 0.4);
 }
 
 .bubble.assistant {
-  background: linear-gradient(
-    160deg,
-    rgba(254, 198, 124, 0.34) 0%,
-    rgba(196, 186, 101, 0.4) 52%,
-    rgba(138, 140, 65, 0.36) 100%
-  );
-  color: var(--cream);
-  border: 1px solid rgba(254, 198, 124, 0.38);
+  background: rgba(29, 42, 98, 0.58);
+  color: #F8FAFC;
+  border: 1px solid rgba(245, 243, 216, 0.25);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.5);
   border-bottom-left-radius: 4px;
-  backdrop-filter: blur(12px) saturate(1.15);
-  -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 8px 18px rgba(77, 90, 46, 0.16);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.28), 0 10px 30px rgba(13, 21, 54, 0.3);
 }
 
 .bubble-meta {
-  font-size: 0.76rem;
-  letter-spacing: 0.02em;
-  color: var(--apricot);
-  margin-top: 0.5rem;
-  padding-top: 0.4rem;
-  border-top: 1px dashed rgba(254, 198, 124, 0.35);
-  opacity: 0.95;
-  line-height: 1.35;
+  font-size: 0.8rem;
+  color: #C8EE83;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgba(245, 243, 216, 0.24);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-/* Chat Input Bar (Form) - Uyumlu Renkler & Estetik */
+/* Chat Input Bar Form (Floating Sleek Capsule) */
 [data-testid="stForm"] {
-  border: 1px solid rgba(246, 239, 224, 0.28) !important;
-  border-top: 1px solid rgba(246, 239, 224, 0.16) !important;
-  border-radius: 0 0 var(--panel-radius) var(--panel-radius) !important;
-  background: linear-gradient(
-    180deg,
-    rgba(77, 90, 46, 0.58),
-    rgba(61, 70, 32, 0.68)
-  ) !important;
-  backdrop-filter: blur(22px) saturate(1.3) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.3) !important;
-  padding: 0.75rem 0.95rem !important;
-  margin: 0 !important;
-  box-shadow: 0 18px 50px rgba(77, 90, 46, 0.22) !important;
-}
-
-[data-testid="stForm"] [data-testid="stHorizontalBlock"] {
-  align-items: center !important;
-  gap: 0.55rem !important;
-}
-
-/* Metin Giriş Kutusu (Warm Glass Apricot Tint) */
-[data-testid="stForm"] [data-testid="stTextInput"] > div > div {
-  background: rgba(254, 198, 124, 0.24) !important;
-  border: 1.5px solid rgba(254, 198, 124, 0.45) !important;
-  border-radius: 14px !important;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.12) !important;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-}
-
-[data-testid="stForm"] [data-testid="stTextInput"] > div > div:focus-within {
-  border-color: rgba(254, 198, 124, 0.9) !important;
-  box-shadow: 0 0 14px rgba(254, 198, 124, 0.45) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 var(--card-radius) var(--card-radius) !important;
+  background: rgba(24, 34, 76, 0.58) !important;
+  backdrop-filter: blur(32px) !important;
+  -webkit-backdrop-filter: blur(32px) !important;
+  padding: 0.8rem 1.1rem !important;
+  box-shadow: 0 18px 45px rgba(13, 21, 54, 0.35) !important;
 }
 
 [data-testid="stForm"] [data-testid="stTextInput"] input {
-  background: transparent !important;
-  color: #F4EAD4 !important;
-  font-family: "Figtree", sans-serif !important;
-  font-size: 0.95rem !important;
-  padding: 0.7rem 1rem !important;
-}
-
-[data-testid="stForm"] [data-testid="stTextInput"] input::placeholder {
-  color: rgba(244, 234, 212, 0.65) !important;
-  font-style: italic !important;
-}
-
-/* Mesaj Gönder Butonu (Warm Gradient: Orange -> Salmon) */
-[data-testid="stForm"] div.stButton > button,
-[data-testid="stForm"] [data-testid="stFormSubmitButton"] button,
-[data-testid="stForm"] button[kind="primaryFormSubmit"],
-[data-testid="stForm"] button[kind="secondaryFormSubmit"] {
-  background: linear-gradient(135deg, #FC9C51 0%, #E9767F 100%) !important;
-  color: #F3EBE0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  background: rgba(18, 26, 60, 0.65) !important;
+  border: 1.3px solid rgba(135, 174, 206, 0.45) !important;
+  color: #FFFFFF !important;
   border-radius: 14px !important;
-  font-weight: 700 !important;
-  font-size: 0.95rem !important;
-  padding: 0.7rem 1.15rem !important;
-  min-height: 2.75rem !important;
-  height: 2.75rem !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  box-shadow: 0 4px 16px rgba(233, 118, 127, 0.38) !important;
-  transition: all 0.2s ease !important;
-  white-space: nowrap !important;
+  font-size: 0.93rem !important;
+  padding: 0.7rem 1.1rem !important;
+  transition: all 0.25s ease !important;
 }
 
-[data-testid="stForm"] div.stButton > button:hover,
-[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {
-  transform: translateY(-1px) scale(1.02) !important;
-  box-shadow: 0 6px 20px rgba(233, 118, 127, 0.55) !important;
-  background: linear-gradient(135deg, #FDAB6B 0%, #ED868E 100%) !important;
+[data-testid="stForm"] [data-testid="stTextInput"] input:focus {
+  border-color: var(--pistachio-bright) !important;
+  background: rgba(18, 26, 60, 0.85) !important;
+  box-shadow: 0 0 18px rgba(175, 208, 110, 0.45) !important;
 }
 
-/* Kayıtlar (Tickets) Alanı */
-.tickets-thread {
-  height: calc(100vh - 16.6rem);
-  min-height: 480px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 0.95rem 1.05rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  border: 1px solid rgba(246, 239, 224, 0.28);
-  border-top: 0;
-  border-radius: 0 0 var(--panel-radius) var(--panel-radius);
-  background: linear-gradient(
-    165deg,
-    rgba(94, 92, 45, 0.62) 0%,
-    rgba(77, 90, 46, 0.52) 55%,
-    rgba(61, 70, 32, 0.58) 100%
-  );
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
-  box-shadow:
-    0 18px 50px rgba(77, 90, 46, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+[data-testid="stForm"] button {
+  background: linear-gradient(135deg, #AFD06E 0%, #87AECE 100%) !important;
+  color: #1D2A62 !important;
+  border: 1px solid rgba(255, 255, 255, 0.65) !important;
+  border-radius: 14px !important;
+  font-weight: 800 !important;
+  font-size: 0.93rem !important;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 20px rgba(175, 208, 110, 0.45) !important;
+  transition: all 0.25s ease !important;
 }
 
-.record-empty {
-  padding: 2.5rem 1.2rem;
-  text-align: center;
-  color: var(--paper);
-  opacity: 0.82;
-  font-size: 0.95rem;
-  line-height: 1.6;
+[data-testid="stForm"] button:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 8px 28px rgba(175, 208, 110, 0.65) !important;
 }
 
-.ticket-card {
-  background: rgba(31, 36, 18, 0.35);
-  border: 1px solid rgba(246, 239, 224, 0.22);
-  border-radius: 16px;
-  padding: 1rem 1.15rem;
-  color: var(--cream);
-  backdrop-filter: blur(8px);
-  transition: transform 0.15s ease, border-color 0.15s ease;
+/* Quick Action Buttons (Glass Pills) */
+div.stButton > button {
+  background: rgba(245, 243, 216, 0.12) !important;
+  color: var(--beige) !important;
+  border: 1px solid rgba(245, 243, 216, 0.28) !important;
+  border-top: 1.2px solid rgba(255, 255, 255, 0.4) !important;
+  font-weight: 600 !important;
+  font-size: 0.8rem !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(16px) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+div.stButton > button:hover {
+  background: rgba(175, 208, 110, 0.32) !important;
+  color: #FFFFFF !important;
+  border-color: var(--pistachio-bright) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(175, 208, 110, 0.35) !important;
 }
 
-.ticket-card:hover {
-  border-color: rgba(254, 198, 124, 0.45);
-  transform: translateY(-1px);
-}
-
-.ticket-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.45rem;
-}
-
-.ticket-id {
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--apricot);
-}
-
-.ticket-badges {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.badge-status {
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.18rem 0.55rem;
-  border-radius: 99px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.badge-status.open {
-  background: rgba(233, 118, 127, 0.22);
-  color: #F9BDB0;
-  border: 1px solid rgba(233, 118, 127, 0.45);
-}
-
-.badge-status.in_progress {
-  background: rgba(254, 198, 124, 0.22);
-  color: #FEC67C;
-  border: 1px solid rgba(254, 198, 124, 0.45);
-}
-
-.badge-status.resolved,
-.badge-status.accepted {
-  background: rgba(138, 140, 65, 0.3);
-  color: #C4BA65;
-  border: 1px solid rgba(138, 140, 65, 0.5);
-}
-
-.badge-urgency {
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.18rem 0.5rem;
-  border-radius: 99px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(246, 239, 224, 0.15);
-}
-
-.badge-urgency.high { color: #E9767F; }
-.badge-urgency.medium { color: #FEC67C; }
-.badge-urgency.low { color: #C4BA65; }
-
-.ticket-title {
-  font-family: "Bodoni Moda", serif;
-  font-style: italic;
-  font-size: 1.12rem;
-  color: var(--paper);
-  margin: 0.2rem 0 0.4rem 0;
-  line-height: 1.25;
-}
-
-.ticket-path {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-bottom: 0.6rem;
-  line-height: 1.35;
-}
-
-.ticket-grid {
+/* KPI Stat Cards */
+.kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 0.4rem 0.8rem;
-  font-size: 0.82rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid rgba(246, 239, 224, 0.12);
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+.kpi-box {
+  background: rgba(29, 42, 98, 0.45);
+  border: 1px solid var(--glass-border);
+  border-top: 1.5px solid var(--glass-border-light);
+  border-radius: 16px;
+  padding: 0.95rem 1rem;
+  text-align: center;
+  backdrop-filter: blur(24px);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25), 0 12px 28px rgba(13, 21, 54, 0.25);
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+.kpi-box:hover {
+  transform: translateY(-3px);
+  border-color: var(--pistachio-bright);
+}
+.kpi-num {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #DBF3A1;
+  letter-spacing: -0.03em;
+}
+.kpi-lbl {
+  font-size: 0.74rem;
+  color: var(--text-carolina);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
 }
 
-.ticket-grid-item {
-  color: var(--sand);
+/* Ticket Glass Card */
+.ticket-glass {
+  background: rgba(29, 42, 98, 0.48);
+  border: 1px solid var(--glass-border);
+  border-top: 1.5px solid var(--glass-border-light);
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 0.85rem;
+  backdrop-filter: blur(22px);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2), 0 10px 28px rgba(13, 21, 54, 0.28);
+  transition: all 0.25s ease;
+}
+.ticket-glass:hover {
+  border-color: var(--carolina-light);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(13, 21, 54, 0.45);
 }
 
-.ticket-grid-item strong {
-  color: var(--paper);
-}
-
-.ticket-ask {
-  margin-top: 0.55rem;
-  font-size: 0.82rem;
-  font-style: italic;
-  color: var(--cream);
-  opacity: 0.88;
-  line-height: 1.4;
-  background: rgba(0, 0, 0, 0.18);
-  padding: 0.4rem 0.65rem;
+.t-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.22rem 0.6rem;
   border-radius: 8px;
+  letter-spacing: 0.04em;
+}
+.t-badge.open { background: rgba(244, 63, 94, 0.24); color: #FED7AA; border: 1px solid rgba(244, 63, 94, 0.45); }
+.t-badge.resolved { background: rgba(175, 208, 110, 0.28); color: #E4F7BA; border: 1px solid rgba(175, 208, 110, 0.55); }
+.t-badge.high { background: rgba(249, 115, 22, 0.24); color: #FFEDD5; border: 1px solid rgba(249, 115, 22, 0.45); }
+.t-badge.medium { background: rgba(135, 174, 206, 0.28); color: #E0F2FE; border: 1px solid rgba(135, 174, 206, 0.45); }
+
+/* Streamlit Tabs Glass Styling */
+div[data-baseweb="tab-list"] {
+  background: rgba(18, 26, 60, 0.48) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 14px !important;
+  padding: 0.35rem !important;
+  gap: 0.35rem !important;
+}
+
+div[data-baseweb="tab"] {
+  border-radius: 10px !important;
+  color: var(--text-carolina) !important;
+  padding: 0.5rem 1.1rem !important;
+  font-weight: 600 !important;
+  font-size: 0.88rem !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+}
+
+div[data-baseweb="tab"][aria-selected="true"] {
+  background: rgba(175, 208, 110, 0.28) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(175, 208, 110, 0.55) !important;
+  box-shadow: 0 4px 14px rgba(175, 208, 110, 0.2) !important;
+}
+
+/* Streamlit Expanders Glass Styling */
+div[data-testid="stExpander"] {
+  background: rgba(29, 42, 98, 0.42) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-top: 1.2px solid rgba(255, 255, 255, 0.35) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(20px) !important;
+  margin-bottom: 0.7rem !important;
+}
+
+div[data-testid="stExpander"] summary {
+  color: var(--beige) !important;
+  font-weight: 600 !important;
 }
 </style>
 """
 
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.markdown(ETHEREAL_BOTANICAL_CSS, unsafe_allow_html=True)
 
 
 def _init_state():
@@ -688,65 +434,28 @@ _init_state()
 
 def _format_content(text: str) -> str:
     escaped = html.escape(text)
-    # Bold **text** -> <strong>text</strong>
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-    # Italic *text* -> <em>text</em>
     escaped = re.sub(r"\*(.+?)\*", r"<em>\1</em>", escaped)
-    # Newlines -> <br>
+    escaped = re.sub(r"`(.+?)`", r"<code style='background:rgba(135,174,206,0.25);color:#FFFFFF;padding:2px 6px;border-radius:5px;border:1px solid rgba(135,174,206,0.45);'>\1</code>", escaped)
     return escaped.replace("\n", "<br>")
 
 
-def _format_date(iso_str: str) -> str:
-    if not iso_str:
-        return "—"
-    try:
-        parts = iso_str.split("T")
-        d_parts = parts[0].split("-")
-        t_part = parts[1][:5] if len(parts) > 1 else ""
-        return f"{d_parts[2]}.{d_parts[1]}.{d_parts[0]} {t_part}".strip()
-    except Exception:
-        return iso_str
-
-
-def _status_label(status: str) -> str:
-    status = (status or "open").lower()
-    if status == "open":
-        return "Açık"
-    if status == "in_progress":
-        return "İnceleniyor"
-    if status in {"resolved", "accepted"}:
-        return "Çözüldü"
-    return status.title()
-
-
-def _urgency_label(urgency: str) -> str:
-    urgency = (urgency or "medium").lower()
-    if urgency == "high":
-        return "Yüksek Öncelik"
-    if urgency == "low":
-        return "Düşük Öncelik"
-    return "Orta Öncelik"
-
-
-def _handle_send():
-    user_input = st.session_state.get("chat_input_text", "").strip()
-    if not user_input:
+def _send_message(user_text: str):
+    user_text = (user_text or "").strip()
+    if not user_text:
         return
 
-    # Add user message
     st.session_state.messages.append(
-        {"role": "user", "content": user_input, "meta": ""}
+        {"role": "user", "content": user_text, "meta": ""}
     )
 
-    # Convert session history
     history = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state.messages
     ]
 
-    # Run orchestrator
     result = handle_turn(
-        user_input,
+        user_text,
         history=history,
         phase=st.session_state.phase,
         last_rule_id=st.session_state.last_rule_id,
@@ -755,7 +464,6 @@ def _handle_send():
         classification=st.session_state.classification,
     )
 
-    # Update states
     st.session_state.phase = result.phase
     st.session_state.last_rule_id = result.last_rule_id
     st.session_state.slots = result.slots or {}
@@ -766,10 +474,9 @@ def _handle_send():
     elif result.debug.get("action") == "resolved":
         st.session_state.last_ticket_id = None
 
-    # Meta text (sınıflandırma bilgisi)
     meta_line = ""
     if result.classification and result.classification.get("path_label"):
-        meta_line = f"🏷️ Sınıf: {result.classification['path_label']}"
+        meta_line = f"🏷️ {result.classification['path_label']}"
 
     st.session_state.messages.append(
         {
@@ -778,9 +485,6 @@ def _handle_send():
             "meta": meta_line,
         }
     )
-
-    # Clear input
-    st.session_state.chat_input_text = ""
 
 
 def _reset_chat():
@@ -796,53 +500,42 @@ def _reset_chat():
     st.session_state.last_rule_id = None
     st.session_state.last_ticket_id = None
     st.session_state.classification = None
-    st.session_state.chat_input_text = ""
 
 
 # -------------------------------------------------------------
-# Sayfa Üst Başlığı
+# Top Hero Header (Floating Island)
 # -------------------------------------------------------------
 st.markdown(
     """
-<div class="page-head">
-  <h1 class="page-title">ITSM Asistanı</h1>
-  <p class="page-sub">Kurum içi destek asistanı. Talebi doğal dille alır, sınıflandırır, geçmiş çözümlerden önerir ve gerektiğinde kayıt açar.</p>
+<div class="hero-island">
+  <div>
+    <h1 class="hero-title">ITSM AI Asistanı & Yönetici Kokpiti</h1>
+    <p class="hero-subtitle">Doğal Dil Anlama · ITIL Çözüm Önerisi · Dinamik Veri Tamamlama · 4 Kademeli Taksonomi · Günlük Rapor JOB</p>
+  </div>
+  <div style="display:flex; align-items:center; gap:0.5rem;">
+    <span class="badge-online">🌿 Sistem Aktif</span>
+  </div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
 # -------------------------------------------------------------
-# İki Kolonlu Panel Düzeni
+# Two Main Columns
 # -------------------------------------------------------------
-col_chat, col_tickets = st.columns([1, 1], gap="medium")
+col_chat, col_admin = st.columns([1.1, 1], gap="large")
 
 # =============================================================
-# SOL KUTUCUK: Asistan ile Sohbet
+# SOL KOLON: AI Destek Sohbeti
 # =============================================================
 with col_chat:
-    # Header bar: Sol tarafta başlık, Sağ tarafta beyaz "Yeni Sohbet" butonu
-    head_left, head_right = st.columns([3.3, 1.3], gap="small")
-    with head_left:
-        st.markdown(
-            """
-<div class="panel-bar-left">
-  <span class="panel-glyph">✦</span>
-  <span class="panel-title">Asistan</span>
-  <span class="panel-sub">· Doğal dil desteği</span>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-    with head_right:
-        st.button(
-            "Yeni Sohbet",
-            key="btn_new_chat",
-            on_click=_reset_chat,
-            use_container_width=True,
-        )
+    c_title, c_reset = st.columns([3, 1])
+    with c_title:
+        st.markdown("<h3 style='margin:0; font-size:1.22rem; font-weight:700; color:#FFFFFF;'>💬 AI Destek Asistanı</h3>", unsafe_allow_html=True)
+    with c_reset:
+        st.button("🔄 Yeni Sohbet", on_click=_reset_chat, use_container_width=True)
 
-    # Messages HTML Thread
+    # Chat Messages Thread
     msg_html_list = []
     for msg in st.session_state.messages:
         role = msg["role"]
@@ -864,7 +557,7 @@ with col_chat:
     thread_body = "\n".join(msg_html_list)
     st.markdown(
         f"""
-<div class="chat-thread" id="chatThread">
+<div class="chat-container" id="chatThread">
   {thread_body}
 </div>
 <script>
@@ -875,111 +568,218 @@ with col_chat:
         unsafe_allow_html=True,
     )
 
-    # Form with text input and submit button (warm gradient send button)
+    # Chat Input Box
     with st.form("chat_form", clear_on_submit=True):
-        form_cols = st.columns([5.5, 1.5], gap="small")
-        with form_cols[0]:
-            st.text_input(
-                "Mesaj",
-                placeholder="Talebinizi veya sorununuzu yazın...",
-                key="chat_input_text",
+        f_in, f_btn = st.columns([4.8, 1.2])
+        with f_in:
+            user_msg = st.text_input(
+                "Mesajınız",
+                placeholder="Örn: Laptopum açılmıyor / VPN bağlanmıyor talep aç / Günlük özet raporu hazırla...",
                 label_visibility="collapsed",
+                key="user_text_input",
             )
-        with form_cols[1]:
-            st.form_submit_button("Gönder ➤", on_click=_handle_send, use_container_width=True)
+        with f_btn:
+            submitted = st.form_submit_button("Gönder ➤", use_container_width=True)
+            if submitted and user_msg:
+                _send_message(user_msg)
+                st.rerun()
+
+    # Quick Demo Scenarios (5 Meeting Requirements)
+    st.markdown("<p style='font-size:0.8rem; font-weight:700; color:#B8D5ED; margin:0.6rem 0 0.3rem 0;'>🚀 HIZLI TEST SENARYOLARI (Toplantı Maddeleri):</p>", unsafe_allow_html=True)
+    demo_cols = st.columns(5)
+    with demo_cols[0]:
+        if st.button("💡 1. Çözüm", use_container_width=True, help="Donanım arızasında AI çözüm adımı sunar"):
+            _send_message("Laptopum açılmıyor, ekran siyah.")
+            st.rerun()
+    with demo_cols[1]:
+        if st.button("🎫 2. Bilet & Slot", use_container_width=True, help="Eksik alanları dinamik tamamlayıp bilet açar"):
+            _send_message("VPN bağlanamıyorum, talep aç")
+            st.rerun()
+    with demo_cols[2]:
+        if st.button("❓ 3. Netleştir", use_container_width=True, help="Muğlak ifadelerde akıllı soru sorar"):
+            _send_message("Bir sorunum var yardımcı olur musun")
+            st.rerun()
+    with demo_cols[3]:
+        if st.button("✅ 4. Self-Service", use_container_width=True, help="Çözüldüğünde kayıt açmadan kapatır"):
+            _send_message("Şifremi unuttum hesabım kilitlendi.")
+            st.rerun()
+    with demo_cols[4]:
+        if st.button("📊 5. Rapor JOB", use_container_width=True, help="Rapor komutunu günlük JOB kuyruğuna alır"):
+            _send_message("Açık taleplerin raporunu hazırla, günlük özet istiyorum.")
+            st.rerun()
 
 
 # =============================================================
-# SAĞ KUTUCUK: Kayıtlar (Tickets)
+# SAĞ KOLON: Yönetici Kokpiti (Biletler, Raporlama/JOBs, KB)
 # =============================================================
-with col_tickets:
+with col_admin:
+    tab_tickets, tab_analytics, tab_kb = st.tabs(["🎫 Bilet Kuyruğu", "📊 Analitik & Günlük JOB", "📚 Bilgi Bankası (27 Süreç)"])
+
     all_tickets = load_tickets()
-    ticket_count = len(all_tickets)
 
-    # Header bar
-    st.markdown(
-        f"""
-<div class="panel-bar-standalone">
-  <div class="panel-bar-left">
-    <span class="panel-glyph">✦</span>
-    <span class="panel-title">Kayıtlar</span>
-    <span class="panel-sub">· {ticket_count} kayıt</span>
+    # -------------------------------------------------------------
+    # TAB 1: Bilet Kuyruğu
+    # -------------------------------------------------------------
+    with tab_tickets:
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            birim_filter = st.selectbox("Birim", ["Tümü", "Bilgi Teknolojileri", "İdari İşler", "İnsan Kaynakları", "Finans"])
+        with f_col2:
+            status_filter = st.selectbox("Durum", ["Tümü", "Açık", "Çözüldü"])
+        with f_col3:
+            search_query = st.text_input("Bilet / Metin Ara", "")
+
+        filtered = list(all_tickets)
+        if birim_filter != "Tümü":
+            filtered = [t for t in filtered if str(t.get("birim_label") or t.get("birim") or "").lower() == birim_filter.lower()]
+        if status_filter != "Tümü":
+            stat_val = "open" if status_filter == "Açık" else "resolved"
+            filtered = [t for t in filtered if t.get("status") == stat_val]
+        if search_query:
+            sq = search_query.lower()
+            filtered = [t for t in filtered if sq in str(t).lower()]
+
+        st.markdown(f"<span style='font-size:0.82rem; color:#B8D5ED;'>Toplam Listelenen: <strong style='color:#DBF3A1;'>{len(filtered)} bilet</strong></span>", unsafe_allow_html=True)
+
+        if not filtered:
+            st.info("Kriterlere uygun bilet bulunamadı.")
+        else:
+            for t in reversed(filtered):
+                tid = t.get("id", "T-XXXX")
+                stat = t.get("status", "open")
+                stat_badge = '<span class="t-badge open">Açık</span>' if stat != "resolved" else '<span class="t-badge resolved">Çözüldü</span>'
+                urgency = t.get("urgency", "medium")
+                prio_badge = '<span class="t-badge high">Yüksek</span>' if urgency == "high" else '<span class="t-badge medium">Orta</span>'
+                
+                path_text = t.get("path_label") or "—"
+                ask_text = t.get("customer_ask") or ""
+                created = t.get("created_at", "")[:16].replace("T", " ")
+                
+                slots = t.get("slots") or {}
+                slots_items = [f"<strong>{k.replace('_', ' ').title()}:</strong> {v}" for k, v in slots.items() if v]
+                slots_str = " · ".join(slots_items) if slots_items else f"Varlık: {t.get('asset','—')} | Konum: {t.get('location','—')}"
+
+                with st.container():
+                    st.markdown(
+                        f"""
+<div class="ticket-glass">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+    <span style="color:#DBF3A1; font-weight:800; font-size:1.05rem;">{tid}</span>
+    <div>{stat_badge} {prio_badge}</div>
+  </div>
+  <div style="font-size:0.84rem; color:#FFFFFF; margin-bottom:5px;">📍 <strong>{path_text}</strong></div>
+  <div style="font-size:0.8rem; color:#CFE4F6; background:rgba(18,26,60,0.48); padding:6px 10px; border-radius:8px; margin-bottom:6px; border:1px solid rgba(245,243,216,0.14);">
+    {slots_str}
+  </div>
+  <div style="font-size:0.82rem; color:#F5F3D8; font-style:italic;">"{ask_text}"</div>
+  <div style="font-size:0.72rem; color:#B8D5ED; opacity:0.85; margin-top:5px;">🕒 {created}</div>
+</div>
+""",
+                        unsafe_allow_html=True,
+                    )
+                    if stat != "resolved":
+                        if st.button(f"Talebi Çözüldü İşaretle ({tid})", key=f"close_{tid}", use_container_width=True):
+                            update_status(tid, "resolved")
+                            st.rerun()
+
+    # -------------------------------------------------------------
+    # TAB 2: Analitik & Günlük JOB
+    # -------------------------------------------------------------
+    with tab_analytics:
+        st.markdown("<h4 style='font-size:1.05rem; color:#FFFFFF; margin-bottom:0.8rem;'>📈 Yönetici Performans & Öğrenme Metrikleri</h4>", unsafe_allow_html=True)
+        
+        tot = len(all_tickets)
+        resolved_n = sum(1 for t in all_tickets if t.get("status") == "resolved")
+        open_n = sum(1 for t in all_tickets if t.get("status") in {"open", "in_progress", ""})
+        fb_stats = get_feedback_analytics()
+
+        st.markdown(
+            f"""
+<div class="kpi-grid">
+  <div class="kpi-box">
+    <div class="kpi-lbl">Toplam Bilet</div>
+    <div class="kpi-num">{tot}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-lbl">Çözülen (Deflected)</div>
+    <div class="kpi-num" style="color:#DBF3A1;">{resolved_n}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-lbl">Açık / İşlemde</div>
+    <div class="kpi-num" style="color:#FDE047;">{open_n}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-lbl">AI Başarı Oranı</div>
+    <div class="kpi-num" style="color:#6EE7B7;">%{fb_stats['overall_success_rate']:.0f}</div>
   </div>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
 
-    if not all_tickets:
-        tickets_body = """
-<div class="record-empty">
-  Henüz açık veya oluşturulmuş bir kayıt yok.<br><br>
-  Asistanla sohbet ederek arıza, erişim veya hizmet talebi oluşturduğunuzda kayıtlar burada listelenecektir.
-</div>
-"""
-    else:
-        cards_html = []
-        for t in reversed(all_tickets):
-            tid = html.escape(str(t.get("id") or "T-XXXX"))
-            status = str(t.get("status") or "open").lower()
-            status_text = _status_label(status)
-            urgency = str(t.get("urgency") or "medium").lower()
-            urgency_text = _urgency_label(urgency)
+        st.markdown("<hr style='border:0; border-top:1px solid var(--glass-border); margin:1.2rem 0;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='font-size:1.05rem; color:#FFFFFF; margin-bottom:0.4rem;'>⚙️ Günlük Raporlama JOB Paneli (Madde 5)</h4>", unsafe_allow_html=True)
+        st.write("Kullanıcıların chatbot'a ilettiği rapor komutları saklanır ve günlük JOB ile otomatik çalıştırılır.")
 
-            title = str(
-                t.get("surec_label")
-                or t.get("modul_label")
-                or t.get("category")
-                or "Destek Kaydı"
-            )
-            title = html.escape(title)
+        if st.button("⚡ Günlük Rapor JOB'ını Şimdi Çalıştır", use_container_width=True):
+            ran = run_queued_jobs()
+            if ran:
+                st.success(f"{len(ran)} adet rapor işi başarıyla çalıştırıldı ve dağıtıldı!")
+            else:
+                st.info("Kuyrukta bekleyen yeni rapor komutu yok.")
+            st.rerun()
 
-            path = str(
-                t.get("path_label")
-                or t.get("talep_turu_label")
-                or t.get("category")
-                or "—"
-            )
-            path = html.escape(path)
+        jobs = load_jobs()
+        if jobs:
+            for j in reversed(jobs):
+                j_stat = j.get("status")
+                j_badge = "🟢 Gönderildi" if j_stat == "sent" else "🟡 Kuyrukta"
+                with st.expander(f"{j.get('id')} — {j.get('command')} ({j_badge})"):
+                    st.write(f"**Talep Eden:** {j.get('requested_by') or 'Kullanıcı'}")
+                    st.write(f"**Oluşturulma Tarihi:** {j.get('created_at')}")
+                    if j.get("result"):
+                        st.markdown(j.get("result"))
+        else:
+            st.info("Henüz kuyrukta bekleyen bir rapor komutu bulunmuyor.")
 
-            date_str = _format_date(str(t.get("created_at") or ""))
-            asset = html.escape(str(t.get("asset") or "—"))
-            location = html.escape(str(t.get("location") or "—"))
-            impact = html.escape(str(t.get("impact") or "—"))
+    # -------------------------------------------------------------
+    # TAB 3: Bilgi Bankası & Öğrenme (27 Süreç)
+    # -------------------------------------------------------------
+    with tab_kb:
+        st.markdown("<h4 style='font-size:1.05rem; color:#FFFFFF; margin-bottom:0.5rem;'>📚 Kurumsal ITIL Çözüm & Öğrenme Kataloğu</h4>", unsafe_allow_html=True)
+        st.write("AI asistanın self-service olarak sunduğu ve kullanıcı geri bildirimleriyle sürekli güncellenen çözüm kataloğu:")
 
-            ask_text = str(t.get("customer_ask") or "").strip()
-            ask_html = ""
-            if ask_text:
-                ask_html = f'<div class="ticket-ask">"{html.escape(ask_text)}"</div>'
+        sols = load_solutions()
+        kb_by_unit = {}
+        for s in sols:
+            u = s.get("birim_label", "Diğer")
+            kb_by_unit.setdefault(u, []).append(s)
 
-            card = f"""
-<div class="ticket-card">
-  <div class="ticket-card-header">
-    <span class="ticket-id">{tid}</span>
-    <div class="ticket-badges">
-      <span class="badge-status {status}">{status_text}</span>
-      <span class="badge-urgency {urgency}">{urgency_text}</span>
-    </div>
-  </div>
-  <div class="ticket-title">{title}</div>
-  <div class="ticket-path">📍 {path}</div>
-  <div class="ticket-grid">
-    <div class="ticket-grid-item"><strong>Varlık:</strong> {asset}</div>
-    <div class="ticket-grid-item"><strong>Konum:</strong> {location}</div>
-    <div class="ticket-grid-item"><strong>Etki:</strong> {impact}</div>
-    <div class="ticket-grid-item"><strong>Tarih:</strong> {date_str}</div>
-  </div>
-  {ask_html}
-</div>
-"""
-            cards_html.append(card)
-        tickets_body = "\n".join(cards_html)
-
-    st.markdown(
-        f"""
-<div class="tickets-thread">
-  {tickets_body}
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+        for unit_name, items in kb_by_unit.items():
+            st.markdown(f"<h5 style='color:#DBF3A1; margin-top:0.8rem;'>🏢 {unit_name}</h5>", unsafe_allow_html=True)
+            for item in items:
+                sid = item.get("id", "")
+                stats = get_solution_stats(sid)
+                badge_str = f"⭐ {stats['rating_display']}"
+                
+                with st.expander(f"{item.get('title')} ({item.get('surec_label')}) — {badge_str}"):
+                    st.write(f"**Modül:** {item.get('modul_label')} | **Talep Türü:** {item.get('talep_turu')} | **Başarı:** `{badge_str}`")
+                    st.write(f"**Self-Service:** {'Evet ✅' if item.get('self_service_uygun_mu') else 'Hayır 🎫'}")
+                    st.markdown("**Adım Adım Çözüm Rehberi:**")
+                    for step in item.get("steps", []):
+                        st.markdown(f"- {step}")
+                    st.markdown(f"**Zorunlu Alanlar:** `{', '.join(item.get('zorunlu_alanlar', []))}`")
+                    st.markdown(f"**Netleştirme Sorusu:** *{item.get('netlestirme_sorusu', '')}*")
+                    
+                    # Interactive feedback testing buttons for each solution
+                    fb_c1, fb_c2 = st.columns([1, 1])
+                    with fb_c1:
+                        if st.button(f"👍 Faydalı Buldum ({sid})", key=f"up_{sid}"):
+                            record_feedback(sid, True, "Admin Panel Geri Bildirimi")
+                            st.success("Geri bildirim kaydedildi! Başarı puanı güncellendi.")
+                            st.rerun()
+                    with fb_c2:
+                        if st.button(f"👎 Geliştirilmeli ({sid})", key=f"down_{sid}"):
+                            record_feedback(sid, False, "Admin Panel Geri Bildirimi")
+                            st.warning("Eksik çözüm olarak işaretlendi.")
+                            st.rerun()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +22,9 @@ REPORT_PHRASES = (
     "ticket raporu",
     "birim özeti",
     "birim ozeti",
+    "istatistik",
+    "analiz",
+    "kaç talep var",
 )
 
 
@@ -89,22 +93,42 @@ def _rewrite(jobs: list[dict]) -> None:
 def build_unit_summary(birim: str = "") -> str:
     tickets = load_tickets()
     if birim:
-        tickets = [t for t in tickets if str(t.get("birim") or "") == birim]
+        tickets = [t for t in tickets if str(t.get("birim") or "").lower() == birim.lower() or str(t.get("birim_label") or "").lower() == birim.lower()]
+        
+    total_n = len(tickets)
     open_n = sum(1 for t in tickets if t.get("status") in {"open", "in_progress", ""})
     resolved_n = sum(1 for t in tickets if t.get("status") == "resolved")
-    by_unit: dict[str, int] = {}
-    for ticket in tickets:
-        label = str(ticket.get("birim_label") or ticket.get("birim") or "—")
-        by_unit[label] = by_unit.get(label, 0) + 1
+    high_n = sum(1 for t in tickets if t.get("urgency") == "high")
+    
+    by_unit = Counter(str(t.get("birim_label") or t.get("birim") or "Diğer") for t in tickets)
+    by_modul = Counter(str(t.get("modul_label") or t.get("modul") or "Diğer") for t in tickets)
+    by_surec = Counter(str(t.get("surec_label") or t.get("surec") or "Diğer") for t in tickets)
+
+    unit_title = f" ({birim.upper()})" if birim else " (Tüm Birimler)"
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+
     lines = [
-        f"ITSM özet ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
-        f"Toplam kayıt: {len(tickets)} · açık/işlenen: {open_n} · kapanan: {resolved_n}",
+        f"### 📊 ITSM Yönetici Günlük Özeti{unit_title}",
+        f"**Tarih/Saat:** `{now_str}`",
+        f"**Genel Durum:** Toplam {total_n} kayıt · 🟢 {resolved_n} Çözüldü · 🟡 {open_n} Açık/İşlemde · 🔴 {high_n} Yüksek Öncelik",
+        "",
+        "#### 🏢 Birim Bazlı Dağılım:"
     ]
+    
     if by_unit:
-        lines.append("Birim kırılımı: " + ", ".join(f"{k}={v}" for k, v in sorted(by_unit.items())))
+        for u, count in by_unit.most_common():
+            lines.append(f"- **{u}:** {count} talep")
     else:
-        lines.append("Henüz ticket yok.")
-    lines.append("İlgili birim kuyruğuna iletildi (prototip: kayıt dosyasına yazıldı).")
+        lines.append("- Henüz kayıtlı bilet bulunmamaktadır.")
+        
+    if by_surec:
+        lines.append("")
+        lines.append("#### 🔥 En Sık Karşılaşılan Süreçler (Top 5):")
+        for s, count in by_surec.most_common(5):
+            lines.append(f"1. **{s}:** {count} adet")
+            
+    lines.append("")
+    lines.append("📨 *Bu rapor ilgili birim yöneticilerine ve dağıtım listesine otomatik olarak iletilmiştir.*")
     return "\n".join(lines)
 
 

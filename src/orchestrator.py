@@ -1,13 +1,22 @@
 """ITSM turn: classify, suggest KB solution, fill fields, open ticket, or queue report."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 from intents import detect_intents, looks_confirm, looks_decline
 from reports import looks_report_command, queue_report_job
 from rules import force_ticket
 from sentiment import analyze_sentiment, looks_positive_resolution
-from slots import apply_answer, extract_slots, merge_slots, missing_fields, next_prompt
-from solutions import find_solutions, format_solution
+from slots import (
+    apply_answer,
+    extract_slots,
+    get_required_fields_for_surec,
+    merge_slots,
+    missing_fields,
+    next_prompt,
+)
+from solutions import find_solutions, format_solution, record_feedback
 from summaries import build_manager_copy, llm_enabled
 from taxonomy import classify_request, path_line
 from tickets import append_followup, create_ticket, update_status
@@ -24,10 +33,10 @@ class TurnResult:
     classification: dict | None = None
 
 
-def _urgency(sentiment: str, high_risk: bool, impact: str = "") -> str:
-    if high_risk or "tüm ofis" in (impact or ""):
+def _urgency(sentiment: str, high_risk: bool, impact: str = "", priority: str = "") -> str:
+    if high_risk or "tüm ofis" in (impact or "") or priority == "Kritik":
         return "high"
-    if sentiment == "angry":
+    if sentiment == "angry" or priority == "Yüksek":
         return "high"
     return "medium"
 
@@ -126,37 +135,44 @@ def _open_itsm_ticket(
         modul_label=str(classification.get("modul_label") or ""),
         surec=str(classification.get("surec") or ""),
         surec_label=str(classification.get("surec_label") or ""),
-        asset=str(slots.get("asset") or ""),
-        location=str(slots.get("location") or ""),
-        impact=str(slots.get("impact") or ""),
+        slots=slots,
         solution_ids=solution_ids,
     )
 
 
 def _ticket_reply(ticket: dict) -> str:
     path = ticket.get("path_label") or "sınıflandırma"
+    slots = ticket.get("slots") or {}
+    
+    fields_repr = []
+    for k, v in slots.items():
+        if v:
+            clean_k = k.replace("_", " ").title()
+            fields_repr.append(f"{clean_k}: {v}")
+            
+    fields_line = " · ".join(fields_repr) if fields_repr else "Gerekli alanlar kaydedildi."
+    
     return (
-        f"Talebin kaydedildi: {ticket['id']}.\n"
-        f"Sınıf: {path}.\n"
-        f"Varlık: {ticket.get('asset') or '—'} · konum: {ticket.get('location') or '—'} · "
-        f"etki: {ticket.get('impact') or '—'}.\n"
-        f"{ticket.get('birim_label') or 'İlgili birim'} kuyruğuna düştü."
+        f"✅ **Talebiniz Kaydedildi:** {ticket['id']}\n\n"
+        f"📌 **Sınıf:** {path}\n"
+        f"📋 **Kayıt Bilgileri:** {fields_line}\n"
+        f"🏢 **Atanan Kuyruk:** {ticket.get('birim_label') or 'İlgili birim'} (Öncelik: {ticket.get('urgency', 'medium').upper()})"
     )
 
 
-def _suggest_reply(classification: dict, hits: list[dict]) -> str:
+def _suggest_reply(classification: dict, hits: list[dict], user_text: str = "") -> str:
     path = path_line(classification)
-    blocks = [f"Talebini şöyle sınıflandırdım: {path}."]
+    blocks = [f"🔍 **Talebinizi şöyle sınıflandırdım:** {path}"]
     if hits:
-        blocks.append("Benzer çözüm kayıtlarından öneri:")
-        blocks.extend(format_solution(row) for row in hits)
+        blocks.append("💡 **Geçmiş Çözüm Kayıtlarından AI Önerisi:**")
+        blocks.extend(format_solution(row, user_text=user_text) for row in hits)
         blocks.append(
-            "Bu adımlar işe yaradıysa yaz. Yetmezse veya kayıt açmamı istersen "
-            "“talep aç” demen yeterli; eksik alanları tamamlarım."
+            "Bu adımlar işinize yaradıysa belirtebilirsiniz. Eğer sorun devam ediyorsa veya kayıt açmamı isterseniz "
+            "**“talep aç”** demeniz yeterli; eksik bilgileri tamamlayıp kaydınızı oluşturacağım."
         )
     else:
         blocks.append(
-            "Bu sınıfta hazır çözüm kaydı bulamadım. Ticket açmamı ister misin?"
+            "Bu süreç için hazır bir self-service çözüm kaydı bulunamadı. İlgili birime bilet oluşturmamı ister misiniz?"
         )
     return "\n\n".join(blocks)
 
@@ -173,8 +189,12 @@ def _collect_or_open(
     why: str,
     intro: str = "",
 ) -> TurnResult:
-    merged = merge_slots(slots, extract_slots(text))
-    prompt = next_prompt(merged)
+    surec_key = str(classification.get("surec") or "")
+    req_fields = get_required_fields_for_surec(surec_key)
+    
+    merged = merge_slots(slots, extract_slots(text, req_fields), req_fields)
+    prompt = next_prompt(merged, req_fields)
+    
     if prompt:
         debug = _debug(classification, sentiment, "collect_fields")
         lead = intro.strip() + "\n\n" if intro.strip() else ""
@@ -239,7 +259,10 @@ def handle_turn(
     )
     incoming = classify_request(" ".join(part for part in (prior, text) if part))
     classed = _merge_class(classification, incoming)
-    current_slots = merge_slots(slots, None)
+    
+    surec_key = str(classed.get("surec") or "")
+    req_fields = get_required_fields_for_surec(surec_key)
+    current_slots = merge_slots(slots, None, req_fields)
     solution_ids = [last_rule_id] if last_rule_id and str(last_rule_id).startswith("S-") else []
 
     if looks_report_command(text):
@@ -252,8 +275,8 @@ def handle_turn(
         return _with_llm_reply(
             TurnResult(
                 reply=(
-                    f"Rapor komutun kuyruğa alındı: {job['id']}. "
-                    "Günlük JOB (`python src\\daily_jobs.py`) çalışınca özet ilgili birime işlenir."
+                    f"📊 **Rapor komutunuz kuyruğa alındı:** `{job['id']}`\n\n"
+                    "Günlük analitik JOB (`python src\\daily_jobs.py`) çalıştığında özet rapor hazırlanıp ilgili birimlere ulaştırılacaktır."
                 ),
                 phase=phase if phase != "open" else "open",
                 last_rule_id=last_rule_id,
@@ -270,11 +293,11 @@ def handle_turn(
         debug = _debug(classed, sentiment, "resolved")
         return _with_llm_reply(
             TurnResult(
-                reply="Kaydı kapattım. Yeni bir ITSM talebi olursa yazman yeterli.",
+                reply="Talebiniz başarıyla kapatıldı. Başka bir ITSM talebiniz olursa yardımcı olmaktan memnuniyet duyarım.",
                 phase="open",
                 last_rule_id=None,
                 debug=debug,
-                slots=merge_slots(None, None),
+                slots=merge_slots(None, None, req_fields),
                 classification=None,
             ),
             text,
@@ -284,10 +307,10 @@ def handle_turn(
         ticket = append_followup(last_ticket_id or "", text)
         debug = _debug(classed, sentiment, "ticket_followup")
         tid = last_ticket_id or (ticket or {}).get("id") or ""
-        extra = " İkinci kayıt açmadım; bunu aynı talebe işledim." if intents["open_ticket"] else ""
+        extra = " İkinci bir kayıt açılmadı; ek açıklamanız mevcut talebe işlendi." if intents["open_ticket"] else ""
         return _with_llm_reply(
             TurnResult(
-                reply=f"Açık kaydın var ({tid}). Bu ayrıntıyı nota ekledim.{extra}",
+                reply=f"Açık bir kaydınız bulunmaktadır ({tid}). Bu detayı takip notlarına ekledim.{extra}",
                 phase="ticket_open",
                 last_rule_id=last_rule_id,
                 ticket=ticket,
@@ -300,14 +323,16 @@ def handle_turn(
 
     if phase == "suggest_solution":
         if looks_positive_resolution(text) and not intents["still_unresolved"] and not intents["open_ticket"]:
+            if last_rule_id:
+                record_feedback(last_rule_id, is_helpful=True, user_text=text)
             debug = _debug(classed, sentiment, "self_resolved")
             return _with_llm_reply(
                 TurnResult(
-                    reply="Güzel, kayıt açmadım. Tekrar olursa yaz.",
+                    reply="Harika, sorununuzun çözüldüğüne sevindim! Bilet açılmadan self-service olarak tamamlandı. İyi çalışmalar dilerim.",
                     phase="open",
                     last_rule_id=None,
                     debug=debug,
-                    slots=merge_slots(None, None),
+                    slots=merge_slots(None, None, req_fields),
                     classification=None,
                 ),
                 text,
@@ -316,16 +341,18 @@ def handle_turn(
             debug = _debug(classed, sentiment, "solution_declined")
             return _with_llm_reply(
                 TurnResult(
-                    reply="Tamam, ticket açmadım. İstersen başka bir taleple devam edebiliriz.",
+                    reply="Anlaşıldı, kayıt açmadım. İhtiyaç duyduğunuzda yeni bir talep iletebilirsiniz.",
                     phase="open",
                     last_rule_id=None,
                     debug=debug,
-                    slots=merge_slots(None, None),
+                    slots=merge_slots(None, None, req_fields),
                     classification=None,
                 ),
                 text,
             )
         if intents["open_ticket"] or intents["still_unresolved"] or looks_confirm(text):
+            if last_rule_id and intents["still_unresolved"]:
+                record_feedback(last_rule_id, is_helpful=False, user_text=text)
             result = _collect_or_open(
                 text=text,
                 history=history,
@@ -334,13 +361,13 @@ def handle_turn(
                 slots=current_slots,
                 customer_email=owner,
                 solution_ids=solution_ids,
-                why="Kullanıcı çözüm kaydından sonra ticket istedi veya sorun devam etti.",
+                why="Kullanıcı çözüm önerisinden sonra ticket talep etti veya sorun devam etti.",
             )
             return _with_llm_reply(result, text)
         debug = _debug(classed, sentiment, "suggest_wait")
         return _with_llm_reply(
             TurnResult(
-                reply="İşe yaradıysa yaz. Ticket için “talep aç” demen yeterli.",
+                reply="Önerilen adımlar işe yaradıysa belirtebilirsiniz. Destek ekibine kayıt açılması için **“talep aç”** demeniz yeterlidir.",
                 phase="suggest_solution",
                 last_rule_id=last_rule_id,
                 debug=debug,
@@ -351,9 +378,9 @@ def handle_turn(
         )
 
     if phase == "collect_fields":
-        missing = missing_fields(current_slots)
-        field = missing[0] if missing else "asset"
-        current_slots = apply_answer(current_slots, field, text)
+        missing = missing_fields(current_slots, req_fields)
+        field_to_fill = missing[0] if missing else req_fields[0]
+        current_slots = apply_answer(current_slots, field_to_fill, text, req_fields)
         result = _collect_or_open(
             text=text,
             history=history,
@@ -362,7 +389,7 @@ def handle_turn(
             slots=current_slots,
             customer_email=owner,
             solution_ids=solution_ids,
-            why="Zorunlu alanlar tamamlandı; ticket oluşturuldu.",
+            why="Zorunlu alanlar tamamlandı; bilet oluşturuldu.",
         )
         return _with_llm_reply(result, text)
 
@@ -372,27 +399,30 @@ def handle_turn(
             return _with_llm_reply(
                 TurnResult(
                     reply=(
-                        "Hâlâ net değil. "
-                        + str(classed.get("clarify_hint") or "Kısaca cihaz, ağ, yazılım veya erişim de.")
+                        "Talebinizi tam netleştiremedim. "
+                        + str(classed.get("clarify_hint") or "Lütfen cihaz, ağ, yazılım, erişim veya ilgili birimi belirtiniz.")
                     ),
                     phase="clarify",
                     last_rule_id=None,
                     debug=debug,
-                    slots=merge_slots(current_slots, extract_slots(text)),
+                    slots=merge_slots(current_slots, extract_slots(text, req_fields), req_fields),
                     classification=classed,
                 ),
                 text,
             )
         classed = _merge_class(classed, incoming)
+        surec_key = str(classed.get("surec") or "")
+        req_fields = get_required_fields_for_surec(surec_key)
+        current_slots = merge_slots(current_slots, None, req_fields)
 
     # New / clarified request
-    current_slots = merge_slots(current_slots, extract_slots(text))
+    current_slots = merge_slots(current_slots, extract_slots(text, req_fields), req_fields)
     if classed.get("unclear") and not intents["open_ticket"]:
         debug = _debug(classed, sentiment, "clarify")
         return _with_llm_reply(
             TurnResult(
                 reply=(
-                    "Talebini anlamak için biraz netleştireyim. "
+                    "Talebinizi daha doğru yönlendirebilmem için bir sorum var: "
                     + str(classed.get("clarify_hint") or "")
                 ),
                 phase="clarify",
@@ -406,15 +436,20 @@ def handle_turn(
 
     hits = []
     if not sentiment["high_risk"]:
-        hits = find_solutions(text, birim=str(classed.get("birim") or ""))
+        hits = find_solutions(
+            text,
+            birim=str(classed.get("birim") or ""),
+            surec=surec_key,
+        )
     solution_ids = [str(h.get("id")) for h in hits if h.get("id")]
     want_ticket = intents["open_ticket"] or sentiment["high_risk"]
+    
     if hits and not want_ticket:
         sid = solution_ids[0]
         debug = _debug(classed, sentiment, "suggest_solution", {"solution_id": sid})
         return _with_llm_reply(
             TurnResult(
-                reply=_suggest_reply(classed, hits),
+                reply=_suggest_reply(classed, hits, user_text=text),
                 phase="suggest_solution",
                 last_rule_id=sid,
                 debug=debug,
@@ -426,9 +461,9 @@ def handle_turn(
 
     intro = ""
     if hits:
-        intro = _suggest_reply(classed, hits)
+        intro = _suggest_reply(classed, hits, user_text=text)
     why = (
-        "Yüksek risk; self-servis atlandı."
+        "Yüksek risk/öncelik; self-servis atlandı."
         if sentiment["high_risk"]
         else "Hazır çözüm yok veya kullanıcı doğrudan kayıt istedi."
     )

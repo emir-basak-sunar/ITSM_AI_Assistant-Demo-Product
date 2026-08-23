@@ -70,10 +70,18 @@ def create_ticket(
     asset: str = "",
     location: str = "",
     impact: str = "",
+    slots: dict | None = None,
     solution_ids: list[str] | None = None,
     kind: str = "ticket",
 ) -> dict:
     existing = load_tickets()
+    slots_dict = dict(slots or {})
+    
+    # Fill fallback fields if present in slots
+    asset_val = asset or slots_dict.get("asset") or slots_dict.get("cihaz_etiket_no") or slots_dict.get("cihaz_seri_no") or slots_dict.get("yazici_marka_model") or slots_dict.get("uygulama_adi") or ""
+    loc_val = location or slots_dict.get("location") or slots_dict.get("ofis_lokasyon") or slots_dict.get("yazici_lokasyon") or slots_dict.get("lokasyon_kat_oda") or slots_dict.get("teslimat_lokasyonu") or ""
+    impact_val = impact or slots_dict.get("impact") or slots_dict.get("etkilenen_kisi_sayisi") or ""
+    
     ticket = {
         "id": _next_id(existing),
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -96,9 +104,10 @@ def create_ticket(
         "modul_label": modul_label,
         "surec": surec,
         "surec_label": surec_label,
-        "asset": asset,
-        "location": location,
-        "impact": impact,
+        "asset": str(asset_val),
+        "location": str(loc_val),
+        "impact": str(impact_val),
+        "slots": slots_dict,
         "solution_ids": list(solution_ids or []),
         "path_label": " → ".join(
             part
