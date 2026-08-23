@@ -44,14 +44,28 @@ Yapay zeka destekli ilk kademe kurumsal destek (L1 Support) asistanı; **4 kadem
 
 ## 🚀 Hızlı Başlangıç
 
-### 1. Ortam ve Bağımlılıklar
+### 1. Repoyu Klonlama ve Bağımlılıklar
 ```powershell
-python -m venv .asude
-.\.asude\Scripts\Activate.ps1
+# Repoyu klonlayın
+git clone https://github.com/asudekaqlan/ITSM_AI_Assistant.git
+cd ITSM_AI_Assistant
+
+# Sanal ortam oluşturup aktifleştirin
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Bağımlılıkları yükleyin
 python -m pip install -r requirements.txt
 ```
 
-### 2. Modeli Eğitme ve Test Etme
+### 2. Çevre Değişkenleri (Opsiyonel)
+```powershell
+# .env şablonunu kopyalayıp API anahtarınızı (Gemini / Groq) ekleyin
+copy .env.example .env
+```
+> *Not: API anahtarı eklenmediğinde sistem otomatik olarak akıllı kural tabanlı hibrit RAG modunda çalışır.*
+
+### 3. Modeli Eğitme ve Test Etme
 ```powershell
 # 1.500 verili NLU modelini eğitir (%97.62 test doğruluğu)
 python src\train_itsm_nlu.py
@@ -60,7 +74,7 @@ python src\train_itsm_nlu.py
 python src\eval_dialogues.py
 ```
 
-### 3. Uygulamayı Başlatma
+### 4. Uygulamayı Başlatma
 ```powershell
 streamlit run src\app.py
 ```

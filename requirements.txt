@@ -1,6 +1,7 @@
-pandas
-pyarrow
-scikit-learn
-joblib
-streamlit
-requests
+streamlit>=1.30.0
+scikit-learn>=1.3.0
+pandas>=2.0.0
+joblib>=1.3.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pyarrow>=14.0.0
