@@ -482,6 +482,24 @@ PATHS: tuple[TaxonomyPath, ...] = (
             "sgk yazısı",
             "özlük/çalışma",
             "belgesi",
+            "evlendim",
+            "evlilik",
+            "evlilik bildirimi",
+            "soyadı değişikliği",
+            "soyadi degisikligi",
+            "soyadı",
+            "soyisim",
+            "özel sağlık sigortası",
+            "sağlık sigortası",
+            "saglik sigortasi",
+            "sigorta poliçesi",
+            "aile kapsamı",
+            "eşimi",
+            "esimi",
+            "sağlık poliçesi",
+            "özlük bilgisi",
+            "evrak yükleme",
+            "ik portalı",
         ),
         "Belgeyi e-posta ile (e-imzalı) mi almak istersiniz, yoksa ıslak imzalı elden teslim mi tercih edersiniz?",
     ),
@@ -657,7 +675,8 @@ STRONG_KEYWORDS = {
     "outlook", "teams", "excel", "word", "yazıcı", "yazici", "printer", "toner", "kartuş", "kartus",
     "yetki", "izin", "bordro", "maaş", "maas", "masraf", "avans", "fatura", "klima",
     "sunucu", "server", "kartım", "kart", "fotokopi", "kırtasiye", "kirtasiye", "servis",
-    "monitör", "monitor", "lisans", "elektrik"
+    "monitör", "monitor", "lisans", "elektrik",
+    "evlendim", "evlilik", "soyadı", "soyadi", "sigorta", "sigortası", "özlük", "ozluk", "poliçe", "eşimi"
 }
 
 
@@ -666,10 +685,73 @@ def _hits(text: str, keywords: tuple[str, ...]) -> list[str]:
     return [kw for kw in keywords if fold_tr(kw) in lowered or kw in lowered]
 
 
+PROCESS_ALIASES = {
+    # HR - Özlük
+    "evlilik bildirimi": "ozluk_calisma_belgesi_talebi",
+    "soyadı değişikliği": "ozluk_calisma_belgesi_talebi",
+    "soyadi degisikligi": "ozluk_calisma_belgesi_talebi",
+    "öss (özel sağlık sigortası) aile kapsamı ekleme": "ozluk_calisma_belgesi_talebi",
+    "oss (ozel saglik sigortasi) aile kapsami ekleme": "ozluk_calisma_belgesi_talebi",
+    "sgk giriş/çıkış evrakı talebi": "ozluk_calisma_belgesi_talebi",
+    "sgk giris/cikis evraki talebi": "ozluk_calisma_belgesi_talebi",
+    "bordro/maaş bilgisi talebi": "ozluk_calisma_belgesi_talebi",
+    "bordro/maas bilgisi talebi": "ozluk_calisma_belgesi_talebi",
+    "bordro vergi matrahı itirazı": "ozluk_calisma_belgesi_talebi",
+    "bordro vergi matrahi itirazi": "ozluk_calisma_belgesi_talebi",
+    "bes (bireysel emeklilik) kesintisi talebi": "ozluk_calisma_belgesi_talebi",
+    # HR - İzin
+    "doğum/analık izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "dogum/analik izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "babalık izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "babalik izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "süt izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "sut izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "ücretsiz izin talebi": "i̇zin_i̇ptal_degisiklik",
+    "ucretsiz izin talebi": "i̇zin_i̇ptal_degisiklik",
+    "evlilik izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "vefat/mazeret izni talebi": "i̇zin_i̇ptal_degisiklik",
+    "sağlık raporu/istirahat bildirimi": "i̇zin_i̇ptal_degisiklik",
+    "saglik raporu/istirahat bildirimi": "i̇zin_i̇ptal_degisiklik",
+    # Finans - Masraf
+    "döviz kuru farkı/uyumsuzluğu": "masraf_harcama_formu_onayi",
+    "doviz kuru farki/uyumsuzlugu": "masraf_harcama_formu_onayi",
+    "harcama fişi kayıp beyanı": "masraf_harcama_formu_onayi",
+    "harcama fisi kayip beyani": "masraf_harcama_formu_onayi",
+    "kurumsal kredi kartı limit artırımı": "masraf_harcama_formu_onayi",
+    "kurumsal kredi karti limit artirimi": "masraf_harcama_formu_onayi",
+    "onay akışında yönetici görünmüyor sorunu": "masraf_harcama_formu_onayi",
+    "onay akisinda yonetici gorunmuyor sorunu": "masraf_harcama_formu_onayi",
+    # Finans - Fatura
+    "tedarikçi ıban/vade mutabakatı": "fatura_odeme_takibi",
+    "tedarikci iban/vade mutabakati": "fatura_odeme_takibi",
+    "çoklu para birimli fatura girişi": "fatura_odeme_takibi",
+    "coklu para birimli fatura girisi": "fatura_odeme_takibi",
+    # İdari İşler
+    "kargo/kurye teslimat takibi": "kirtasiye_malzeme_talebi",
+    "toplantı odası ekipman arızası (clickshare/projeksiyon)": "yazici_fotokopi_ariza_bildirimi",
+    "toplanti odasi ekipman arizasi (clickshare/projeksiyon)": "yazici_fotokopi_ariza_bildirimi",
+    "ofis mobilya arızası (ergonomik masa/koltuk)": "ofis_mobilya_degisimi",
+    "ofis mobilya arizasi (ergonomik masa/koltuk)": "ofis_mobilya_degisimi",
+    "ziyaretçi giriş talebi": "kayip_giris_karti",
+    "ziyaretci giris talebi": "kayip_giris_karti",
+    "misafir otopark izni": "servis_guzergah_talebi",
+    "bina içi teknik bakım talebi": "elektrik_aydinlatma_arizasi",
+    "bina ici teknik bakim talebi": "elektrik_aydinlatma_arizasi",
+}
+
+
 def path_by_surec(surec: str) -> TaxonomyPath | None:
     surec_norm = fold_tr(surec)
+    if surec_norm in PROCESS_ALIASES:
+        surec_norm = fold_tr(PROCESS_ALIASES[surec_norm])
+
     for path in PATHS:
-        if path.surec == surec or fold_tr(path.surec) == surec_norm or fold_tr(path.surec_label) == surec_norm:
+        if (
+            path.surec == surec
+            or fold_tr(path.surec) == surec_norm
+            or fold_tr(path.surec_label) == surec_norm
+            or path.surec == PROCESS_ALIASES.get(surec_norm)
+        ):
             return path
     return None
 

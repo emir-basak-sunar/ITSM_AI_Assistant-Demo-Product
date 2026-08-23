@@ -27,9 +27,11 @@ import streamlit as st
 import llm_engine
 import solutions
 import orchestrator
+import taxonomy
 importlib.reload(llm_engine)
 importlib.reload(solutions)
 importlib.reload(orchestrator)
+importlib.reload(taxonomy)
 
 from llm_engine import is_llm_active
 from orchestrator import handle_turn
@@ -231,6 +233,48 @@ header[data-testid="stHeader"] {
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.28), 0 10px 30px rgba(13, 21, 54, 0.3);
 }
 
+/* Typing / Thinking Glass Indicator */
+.typing-bubble {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.8rem !important;
+  padding: 0.85rem 1.25rem !important;
+  background: rgba(29, 42, 98, 0.7) !important;
+  border: 1.2px solid rgba(175, 208, 110, 0.5) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 8px 24px rgba(13, 21, 54, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.25) !important;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.typing-dots .dot {
+  width: 7.5px;
+  height: 7.5px;
+  background: #C7EE7B;
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots .dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
+  40% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 12px #AFD06E; }
+}
+
+.typing-text {
+  font-size: 0.86rem;
+  color: #DCF0A3;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .bubble-meta {
   font-size: 0.8rem;
   color: #C8EE83;
@@ -255,22 +299,113 @@ header[data-testid="stHeader"] {
   box-shadow: 0 18px 45px rgba(13, 21, 54, 0.35) !important;
 }
 
-[data-testid="stForm"] [data-testid="stTextInput"] input {
-  background: rgba(18, 26, 60, 0.65) !important;
+/* Outer containers transparent so no gray/dark edges show */
+div[data-testid="stSelectbox"] > div,
+div[data-testid="stSelectbox"] [data-baseweb="select"],
+div[data-testid="stTextInput"] > div,
+div[data-testid="stTextInput"] [data-baseweb="base-input"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* The actual pill itself (100% full width, uniform background) */
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+div[data-testid="stTextInput"] [data-baseweb="input"] {
+  background: rgba(29, 42, 98, 0.78) !important;
+  background-color: rgba(29, 42, 98, 0.78) !important;
   border: 1.3px solid rgba(135, 174, 206, 0.45) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.55) !important;
+  border-radius: 12px !important;
+  color: #F5F3D8 !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: 0 4px 16px rgba(12, 18, 48, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.18) !important;
+  transition: all 0.22s ease !important;
+}
+
+/* Inner elements inside the pill inherit transparency */
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div *,
+div[data-testid="stTextInput"] [data-baseweb="input"] * {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #F5F3D8 !important;
+}
+
+div[data-testid="stTextInput"] input {
   color: #FFFFFF !important;
+}
+
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div:hover,
+div[data-testid="stTextInput"] [data-baseweb="input"]:hover {
+  border-color: #AFD06E !important;
+  background: rgba(36, 52, 118, 0.9) !important;
+  background-color: rgba(36, 52, 118, 0.9) !important;
+  box-shadow: 0 0 18px rgba(175, 208, 110, 0.35) !important;
+}
+
+/* Ensure labels (Birim, Durum, Bilet / Metin Ara) are 100% transparent with NO background */
+label[data-testid="stWidgetLabel"],
+label[data-testid="stWidgetLabel"] div,
+label[data-testid="stWidgetLabel"] p,
+div[data-testid="stWidgetLabel"],
+div[data-testid="stWidgetLabel"] * {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+  margin-bottom: 0.35rem !important;
+  padding: 0 !important;
+}
+
+div[data-testid="stSelectbox"] svg {
+  fill: #AFD06E !important;
+  color: #AFD06E !important;
+}
+
+/* Dropdown Menu Popover Glass */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+ul[role="listbox"] {
+  background: rgba(18, 26, 62, 0.96) !important;
+  border: 1.2px solid rgba(135, 174, 206, 0.4) !important;
   border-radius: 14px !important;
-  font-size: 0.93rem !important;
-  padding: 0.7rem 1.1rem !important;
-  transition: all 0.25s ease !important;
+  backdrop-filter: blur(28px) !important;
+  box-shadow: 0 16px 36px rgba(10, 16, 40, 0.55) !important;
+  padding: 0.35rem !important;
 }
 
-[data-testid="stForm"] [data-testid="stTextInput"] input:focus {
-  border-color: var(--pistachio-bright) !important;
-  background: rgba(18, 26, 60, 0.85) !important;
-  box-shadow: 0 0 18px rgba(175, 208, 110, 0.45) !important;
+li[role="option"] {
+  color: #F5F3D8 !important;
+  border-radius: 8px !important;
+  padding: 0.5rem 0.85rem !important;
+  font-size: 0.88rem !important;
+  transition: background 0.15s ease !important;
 }
 
+li[role="option"]:hover,
+li[role="option"][aria-selected="true"] {
+  background: rgba(175, 208, 110, 0.25) !important;
+  color: #FFFFFF !important;
+}
+
+/* Labels on top of inputs */
+label[data-testid="stWidgetLabel"] p,
+div[data-testid="stWidgetLabel"] label,
+div[data-testid="stWidgetLabel"] p {
+  color: #B8D5ED !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  margin-bottom: 0.3rem !important;
+}
+
+/* Send Button in Form */
 [data-testid="stForm"] button {
   background: linear-gradient(135deg, #AFD06E 0%, #87AECE 100%) !important;
   color: #1D2A62 !important;
@@ -288,24 +423,35 @@ header[data-testid="stHeader"] {
   box-shadow: 0 8px 28px rgba(175, 208, 110, 0.65) !important;
 }
 
-/* Quick Action Buttons (Glass Pills) */
-div.stButton > button {
-  background: rgba(245, 243, 216, 0.12) !important;
-  color: var(--beige) !important;
-  border: 1px solid rgba(245, 243, 216, 0.28) !important;
-  border-top: 1.2px solid rgba(255, 255, 255, 0.4) !important;
+/* All Secondary & Quick Action Buttons (Glass Pills) */
+button[kind="secondary"],
+button[data-testid="baseButton-secondary"],
+button[data-testid="stBaseButton-secondary"],
+div.stButton > button,
+div[data-testid="stButton"] button {
+  background: linear-gradient(135deg, rgba(29, 42, 98, 0.6) 0%, rgba(38, 56, 122, 0.4) 100%) !important;
+  color: #F5F3D8 !important;
+  border: 1.2px solid rgba(135, 174, 206, 0.35) !important;
+  border-top: 1.4px solid rgba(255, 255, 255, 0.45) !important;
   font-weight: 600 !important;
-  font-size: 0.8rem !important;
+  font-size: 0.82rem !important;
   border-radius: 12px !important;
-  backdrop-filter: blur(16px) !important;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  box-shadow: 0 4px 14px rgba(15, 25, 60, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.18) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-div.stButton > button:hover {
-  background: rgba(175, 208, 110, 0.32) !important;
+
+button[kind="secondary"]:hover,
+button[data-testid="baseButton-secondary"]:hover,
+button[data-testid="stBaseButton-secondary"]:hover,
+div.stButton > button:hover,
+div[data-testid="stButton"] button:hover {
+  background: linear-gradient(135deg, rgba(175, 208, 110, 0.35) 0%, rgba(67, 113, 24, 0.42) 100%) !important;
   color: #FFFFFF !important;
   border-color: var(--pistachio-bright) !important;
   transform: translateY(-2px) !important;
-  box-shadow: 0 6px 18px rgba(175, 208, 110, 0.35) !important;
+  box-shadow: 0 6px 20px rgba(175, 208, 110, 0.4) !important;
 }
 
 /* KPI Stat Cards */
@@ -377,17 +523,19 @@ div.stButton > button:hover {
 
 /* Streamlit Tabs Glass Styling */
 div[data-baseweb="tab-list"] {
-  background: rgba(18, 26, 60, 0.48) !important;
-  border: 1px solid var(--glass-border) !important;
+  background: rgba(18, 26, 62, 0.7) !important;
+  border: 1.2px solid rgba(135, 174, 206, 0.35) !important;
+  border-top: 1.4px solid rgba(255, 255, 255, 0.4) !important;
   border-radius: 14px !important;
-  padding: 0.35rem !important;
-  gap: 0.35rem !important;
+  padding: 0.4rem !important;
+  gap: 0.4rem !important;
+  backdrop-filter: blur(24px) !important;
 }
 
 div[data-baseweb="tab"] {
   border-radius: 10px !important;
-  color: var(--text-carolina) !important;
-  padding: 0.5rem 1.1rem !important;
+  color: #B8D5ED !important;
+  padding: 0.55rem 1.15rem !important;
   font-weight: 600 !important;
   font-size: 0.88rem !important;
   border: none !important;
@@ -395,10 +543,21 @@ div[data-baseweb="tab"] {
 }
 
 div[data-baseweb="tab"][aria-selected="true"] {
-  background: rgba(175, 208, 110, 0.28) !important;
+  background: linear-gradient(135deg, rgba(175, 208, 110, 0.35) 0%, rgba(67, 113, 24, 0.45) 100%) !important;
   color: #FFFFFF !important;
-  border: 1px solid rgba(175, 208, 110, 0.55) !important;
-  box-shadow: 0 4px 14px rgba(175, 208, 110, 0.2) !important;
+  border: 1.2px solid rgba(175, 208, 110, 0.6) !important;
+  border-top: 1.3px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 4px 16px rgba(175, 208, 110, 0.3) !important;
+  font-weight: 700 !important;
+}
+
+/* Hide red highlight bar on tabs */
+div[data-baseweb="tab-highlight"],
+div[data-baseweb="tab-border"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  height: 0 !important;
 }
 
 /* Streamlit Expanders Glass Styling */
@@ -415,6 +574,36 @@ div[data-testid="stExpander"] summary {
   color: var(--beige) !important;
   font-weight: 600 !important;
 }
+
+/* Disable Streamlit's default background dimming / gray blur when running */
+div[data-test-script-state="running"],
+.stApp[data-test-script-state="running"],
+.stApp[data-test-script-state="running"] *,
+div.stApp.stApp--running,
+div.stApp.stApp--running *,
+div[data-testid="stAppViewContainer"],
+div[data-testid="stAppViewContainer"] *,
+div[data-testid="stApp"],
+div[data-testid="stApp"] *,
+section.main,
+section.main *,
+div.block-container,
+div.block-container *,
+.st-emotion-cache-1wmy9hl,
+.st-emotion-cache-16txtl3,
+.st-emotion-cache-18ni7ap {
+  opacity: 1 !important;
+  filter: none !important;
+  transition: none !important;
+}
+
+/* Hide the default Streamlit running spinner/badge in the top-right */
+div[data-testid="stStatusWidget"],
+[data-testid="stStatusWidget"],
+div[data-testid="stDecoration"] {
+  display: none !important;
+  visibility: hidden !important;
+}
 </style>
 """
 
@@ -430,6 +619,8 @@ def _init_state():
                 "meta": "",
             }
         ]
+    if "pending_user_text" not in st.session_state:
+        st.session_state.pending_user_text = None
     if "phase" not in st.session_state:
         st.session_state.phase = "open"
     if "slots" not in st.session_state:
@@ -453,7 +644,7 @@ def _format_content(text: str) -> str:
     return escaped.replace("\n", "<br>")
 
 
-def _send_message(user_text: str):
+def _queue_user_message(user_text: str):
     user_text = (user_text or "").strip()
     if not user_text:
         return
@@ -461,43 +652,7 @@ def _send_message(user_text: str):
     st.session_state.messages.append(
         {"role": "user", "content": user_text, "meta": ""}
     )
-
-    history = [
-        {"role": m["role"], "content": m["content"]}
-        for m in st.session_state.messages
-    ]
-
-    result = handle_turn(
-        user_text,
-        history=history,
-        phase=st.session_state.phase,
-        last_rule_id=st.session_state.last_rule_id,
-        last_ticket_id=st.session_state.last_ticket_id,
-        slots=st.session_state.slots,
-        classification=st.session_state.classification,
-    )
-
-    st.session_state.phase = result.phase
-    st.session_state.last_rule_id = result.last_rule_id
-    st.session_state.slots = result.slots or {}
-    st.session_state.classification = result.classification
-
-    if result.ticket:
-        st.session_state.last_ticket_id = result.ticket["id"]
-    elif result.debug.get("action") == "resolved":
-        st.session_state.last_ticket_id = None
-
-    meta_line = ""
-    if result.classification and result.classification.get("path_label"):
-        meta_line = f"🏷️ {result.classification['path_label']}"
-
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": result.reply,
-            "meta": meta_line,
-        }
-    )
+    st.session_state.pending_user_text = user_text
 
 
 def _reset_chat():
@@ -508,6 +663,7 @@ def _reset_chat():
             "meta": "",
         }
     ]
+    st.session_state.pending_user_text = None
     st.session_state.phase = "open"
     st.session_state.slots = {}
     st.session_state.last_rule_id = None
@@ -561,25 +717,33 @@ with col_chat:
 
         bubble_html = (
             f'<div class="bubble-row {role}">'
-            f'  <div class="bubble {role}">'
-            f'    {formatted_text}'
-            f"    {meta_html}"
-            f"  </div>"
-            f"</div>"
+            f'<div class="bubble {role}">'
+            f'{formatted_text}'
+            f'{meta_html}'
+            f'</div>'
+            f'</div>'
         )
         msg_html_list.append(bubble_html)
 
-    thread_body = "\n".join(msg_html_list)
+    # If user message was submitted, display animated typing indicator
+    if st.session_state.pending_user_text:
+        typing_html = (
+            '<div class="bubble-row assistant">'
+            '<div class="bubble assistant typing-bubble">'
+            '<div class="typing-dots">'
+            '<span class="dot"></span>'
+            '<span class="dot"></span>'
+            '<span class="dot"></span>'
+            '</div>'
+            '<span class="typing-text">✨ Yapay zeka talebinizi analiz ediyor & çözüm üretiyor...</span>'
+            '</div>'
+            '</div>'
+        )
+        msg_html_list.append(typing_html)
+
+    thread_body = "".join(msg_html_list)
     st.markdown(
-        f"""
-<div class="chat-container" id="chatThread">
-  {thread_body}
-</div>
-<script>
-  var el = document.getElementById("chatThread");
-  if (el) {{ el.scrollTop = el.scrollHeight; }}
-</script>
-""",
+        f'<div class="chat-container" id="chatThread">{thread_body}</div><script>var el = document.getElementById("chatThread"); if (el) {{ el.scrollTop = el.scrollHeight; }}</script>',
         unsafe_allow_html=True,
     )
 
@@ -596,7 +760,7 @@ with col_chat:
         with f_btn:
             submitted = st.form_submit_button("Gönder ➤", use_container_width=True)
             if submitted and user_msg:
-                _send_message(user_msg)
+                _queue_user_message(user_msg)
                 st.rerun()
 
     # Quick Demo Scenarios (5 Meeting Requirements)
@@ -604,24 +768,64 @@ with col_chat:
     demo_cols = st.columns(5)
     with demo_cols[0]:
         if st.button("💡 1. Çözüm", use_container_width=True, help="Donanım arızasında AI çözüm adımı sunar"):
-            _send_message("Laptopum açılmıyor, ekran siyah.")
+            _queue_user_message("Laptopum açılmıyor, ekran siyah.")
             st.rerun()
     with demo_cols[1]:
         if st.button("🎫 2. Bilet & Slot", use_container_width=True, help="Eksik alanları dinamik tamamlayıp bilet açar"):
-            _send_message("VPN bağlanamıyorum, talep aç")
+            _queue_user_message("VPN bağlanamıyorum, talep aç")
             st.rerun()
     with demo_cols[2]:
         if st.button("❓ 3. Netleştir", use_container_width=True, help="Muğlak ifadelerde akıllı soru sorar"):
-            _send_message("Bir sorunum var yardımcı olur musun")
+            _queue_user_message("Bir sorunum var yardımcı olur musun")
             st.rerun()
     with demo_cols[3]:
         if st.button("✅ 4. Self-Service", use_container_width=True, help="Çözüldüğünde kayıt açmadan kapatır"):
-            _send_message("Şifremi unuttum hesabım kilitlendi.")
+            _queue_user_message("Şifremi unuttum hesabım kilitlendi.")
             st.rerun()
     with demo_cols[4]:
         if st.button("📊 5. Rapor JOB", use_container_width=True, help="Rapor komutunu günlük JOB kuyruğuna alır"):
-            _send_message("Açık taleplerin raporunu hazırla, günlük özet istiyorum.")
+            _queue_user_message("Açık taleplerin raporunu hazırla, günlük özet istiyorum.")
             st.rerun()
+
+    # If pending prompt is queued, execute AI turn and update chat
+    if st.session_state.pending_user_text:
+        pending_text = st.session_state.pending_user_text
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.messages
+        ]
+        result = handle_turn(
+            pending_text,
+            history=history,
+            phase=st.session_state.phase,
+            last_rule_id=st.session_state.last_rule_id,
+            last_ticket_id=st.session_state.last_ticket_id,
+            slots=st.session_state.slots,
+            classification=st.session_state.classification,
+        )
+        st.session_state.phase = result.phase
+        st.session_state.last_rule_id = result.last_rule_id
+        st.session_state.slots = result.slots or {}
+        st.session_state.classification = result.classification
+
+        if result.ticket:
+            st.session_state.last_ticket_id = result.ticket["id"]
+        elif result.debug.get("action") == "resolved":
+            st.session_state.last_ticket_id = None
+
+        meta_line = ""
+        if result.classification and result.classification.get("path_label"):
+            meta_line = f"🏷️ {result.classification['path_label']}"
+
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": result.reply,
+                "meta": meta_line,
+            }
+        )
+        st.session_state.pending_user_text = None
+        st.rerun()
 
 
 # =============================================================
