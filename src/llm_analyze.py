@@ -52,50 +52,42 @@ def generate_record_copy(
     why_unresolved: str,
     high_risk: bool,
     thread_excerpt: str,
-    timeout: float = DEFAULT_TIMEOUT,
+    timeout: float = 4.0,
 ) -> dict[str, Any] | None:
-    """Return summary_bullets + handoff_notes, or None to use templates."""
+    """Return summary_bullets + handoff_notes using Gemini / LLM, or None to use templates."""
     prompt = f"""
-You write a supervisor brief for an already-opened complaint record.
-Do not decide whether to escalate, resolve, or reply to the customer.
-Do not invent facts that are not in the material below.
+Kurumsal ITSM bilet supervisor özeti oluştur.
+Sadece geçerli bir JSON döndür. Markdown veya ekstra açıklama yazma.
 
-Respond with ONLY valid JSON. No markdown. No extra text.
-
-JSON schema:
+JSON Şeması:
 {{
-  "summary_bullets": ["short bullet", "short bullet", "short bullet"],
-  "handoff_notes": "a short paragraph a supervisor can read in ten seconds, then a compact thread recap"
+  "summary_bullets": ["kısa madde 1", "kısa madde 2", "kısa madde 3"],
+  "handoff_notes": "Yöneticinin 10 saniyede okuyabileceği kısa özet ve süreç notu."
 }}
 
-Rules:
-- Exactly 3 summary_bullets, each under 160 characters.
-- Turkish only.
-- Include category, tone, and why it is still open.
+Kurallar:
+- Tam 3 adet özet madde (her biri 150 karakter altında).
+- Türkçe yaz.
 
-Material:
-category: {category}
-sentiment: {sentiment}
-high_risk: {high_risk}
-why_unresolved: {why_unresolved}
-tried_rules: {", ".join(tried_rules) or "none"}
-customer_ask: {customer_ask}
-thread:
+Bilgiler:
+Kategori: {category}
+Üslup: {sentiment}
+Yüksek Risk: {high_risk}
+Gerekçe: {why_unresolved}
+Denene Süreçler: {", ".join(tried_rules) or "yok"}
+Müşteri Talebi: {customer_ask}
+Son Konuşma:
 {thread_excerpt}
 """.strip()
 
-    payload = {
-        "model": DEFAULT_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.2},
-    }
     try:
-        response = requests.post(DEFAULT_URL, json=payload, timeout=timeout)
-        response.raise_for_status()
-        raw = response.json().get("response", "")
-        data = extract_json(raw)
-    except (requests.RequestException, json.JSONDecodeError, ValueError, OSError):
+        from llm_engine import generate_llm_response
+        raw = generate_llm_response(prompt)
+        if raw:
+            data = extract_json(raw)
+        else:
+            return None
+    except Exception:
         return None
 
     bullets_raw = data.get("summary_bullets")

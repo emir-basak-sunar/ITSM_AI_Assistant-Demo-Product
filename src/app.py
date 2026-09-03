@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 # Add src to python path for guaranteed clean module resolution
@@ -706,46 +707,39 @@ with col_chat:
     with c_reset:
         st.button("🔄 Yeni Sohbet", on_click=_reset_chat, use_container_width=True)
 
-    # Chat Messages Thread
-    msg_html_list = []
-    for msg in st.session_state.messages:
-        role = msg["role"]
-        formatted_text = _format_content(msg["content"])
-        meta_html = ""
-        if msg.get("meta"):
-            meta_html = f'<div class="bubble-meta">{html.escape(msg["meta"])}</div>'
+    # Chat Messages Thread (Dynamic Streaming Container)
+    chat_box = st.empty()
 
-        bubble_html = (
-            f'<div class="bubble-row {role}">'
-            f'<div class="bubble {role}">'
-            f'{formatted_text}'
-            f'{meta_html}'
-            f'</div>'
-            f'</div>'
+    def _build_thread_html(extra_bubble: str = "") -> str:
+        msg_html_list = []
+        for msg in st.session_state.messages:
+            role = msg["role"]
+            formatted_text = _format_content(msg["content"])
+            meta_html = ""
+            if msg.get("meta"):
+                meta_html = f'<div class="bubble-meta">{html.escape(msg["meta"])}</div>'
+
+            bubble_html = (
+                f'<div class="bubble-row {role}">'
+                f'<div class="bubble {role}">'
+                f'{formatted_text}'
+                f'{meta_html}'
+                f'</div>'
+                f'</div>'
+            )
+            msg_html_list.append(bubble_html)
+
+        if extra_bubble:
+            msg_html_list.append(extra_bubble)
+
+        thread_body = "".join(msg_html_list)
+        return (
+            f'<div class="chat-container" id="chatThread">{thread_body}</div>'
+            f'<script>var el = document.getElementById("chatThread"); if (el) {{ el.scrollTop = el.scrollHeight; }}</script>'
         )
-        msg_html_list.append(bubble_html)
 
-    # If user message was submitted, display animated typing indicator
-    if st.session_state.pending_user_text:
-        typing_html = (
-            '<div class="bubble-row assistant">'
-            '<div class="bubble assistant typing-bubble">'
-            '<div class="typing-dots">'
-            '<span class="dot"></span>'
-            '<span class="dot"></span>'
-            '<span class="dot"></span>'
-            '</div>'
-            '<span class="typing-text">✨ Yapay zeka talebinizi analiz ediyor & çözüm üretiyor...</span>'
-            '</div>'
-            '</div>'
-        )
-        msg_html_list.append(typing_html)
-
-    thread_body = "".join(msg_html_list)
-    st.markdown(
-        f'<div class="chat-container" id="chatThread">{thread_body}</div><script>var el = document.getElementById("chatThread"); if (el) {{ el.scrollTop = el.scrollHeight; }}</script>',
-        unsafe_allow_html=True,
-    )
+    if not st.session_state.pending_user_text:
+        chat_box.markdown(_build_thread_html(), unsafe_allow_html=True)
 
     # Chat Input Box
     with st.form("chat_form", clear_on_submit=True):
@@ -787,9 +781,25 @@ with col_chat:
             _queue_user_message("Açık taleplerin raporunu hazırla, günlük özet istiyorum.")
             st.rerun()
 
-    # If pending prompt is queued, execute AI turn and update chat
+    # If pending prompt is queued, execute AI turn and stream reply in real time
     if st.session_state.pending_user_text:
         pending_text = st.session_state.pending_user_text
+
+        # 1. Show animated typing indicator first
+        typing_html = (
+            '<div class="bubble-row assistant">'
+            '<div class="bubble assistant typing-bubble">'
+            '<div class="typing-dots">'
+            '<span class="dot"></span>'
+            '<span class="dot"></span>'
+            '<span class="dot"></span>'
+            '</div>'
+            '<span class="typing-text">✨ Yapay zeka analiz ediyor & çözüm üretiyor...</span>'
+            '</div>'
+            '</div>'
+        )
+        chat_box.markdown(_build_thread_html(typing_html), unsafe_allow_html=True)
+
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages
@@ -816,6 +826,22 @@ with col_chat:
         meta_line = ""
         if result.classification and result.classification.get("path_label"):
             meta_line = f"🏷️ {result.classification['path_label']}"
+
+        # 2. Live streaming typewriter animation into the bubble
+        full_reply = result.reply
+        words = full_reply.split(" ")
+        step = max(1, len(words) // 22)
+        for i in range(0, len(words), step):
+            partial_text = " ".join(words[: i + step])
+            stream_bubble = (
+                f'<div class="bubble-row assistant">'
+                f'<div class="bubble assistant">'
+                f'{_format_content(partial_text)} <span style="color:#AFD06E; font-weight:700;">▌</span>'
+                f'</div>'
+                f'</div>'
+            )
+            chat_box.markdown(_build_thread_html(stream_bubble), unsafe_allow_html=True)
+            time.sleep(0.015)
 
         st.session_state.messages.append(
             {

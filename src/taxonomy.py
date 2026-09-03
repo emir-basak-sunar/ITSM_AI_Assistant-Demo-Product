@@ -838,7 +838,7 @@ def classify_request(text: str, min_score: int = 2) -> dict:
         "clarify_hint": (
             best.clarify_hint
             if best
-            else "Talebiniz Bilgi Teknolojileri, İdari İşler, İnsan Kaynakları veya Finans ile mi ilgili? Detay belirtebilir misiniz?"
+            else "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
         ),
     }
 

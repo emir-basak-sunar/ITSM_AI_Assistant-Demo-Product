@@ -26,14 +26,16 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 USE_LLM = os.getenv("ASSISTANT_USE_LLM", "1").strip().lower() in {"1", "true", "yes"}
 
-# High-quota, ultra-fast Gemini models
+# Persistent session with connection pool
+SESSION = requests.Session()
+
+# High-quota, ultra-fast Gemini models (fastest first)
 GEMINI_MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-3-flash-preview",
-    "gemma-4-31b-it",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
     "gemma-4-26b-a4b-it",
+    "gemma-4-31b-it",
 ]
 
 
@@ -44,8 +46,8 @@ def is_llm_active() -> bool:
     return bool(GEMINI_API_KEY or GROQ_API_KEY)
 
 
-def call_gemini(prompt: str, system_prompt: str = "", timeout: float = 14.0) -> str | None:
-    """Call Google Gemini with automatic model fallback."""
+def call_gemini(prompt: str, system_prompt: str = "", timeout: float = 8.0) -> str | None:
+    """Call Google Gemini with automatic model fallback and connection reuse."""
     if not GEMINI_API_KEY:
         return None
     
@@ -64,7 +66,7 @@ def call_gemini(prompt: str, system_prompt: str = "", timeout: float = 14.0) -> 
     for model_name in GEMINI_MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
         try:
-            resp = requests.post(url, json=payload, timeout=timeout)
+            resp = SESSION.post(url, json=payload, timeout=timeout)
             if resp.status_code == 200:
                 data = resp.json()
                 candidates = data.get("candidates") or []

@@ -393,12 +393,13 @@ def handle_turn(
     if phase == "clarify":
         if incoming.get("unclear") and not intents["open_ticket"]:
             debug = _debug(classed, sentiment, "clarify")
+            hint = str(classed.get("clarify_hint") or "").strip()
+            if not hint:
+                hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
+            reply_text = hint if hint.startswith("Size") else f"Talebinizi tam netleştiremedim. {hint}"
             return _with_llm_reply(
                 TurnResult(
-                    reply=(
-                        "Talebinizi tam netleştiremedim. "
-                        + str(classed.get("clarify_hint") or "Lütfen cihaz, ağ, yazılım, erişim veya ilgili birimi belirtiniz.")
-                    ),
+                    reply=reply_text,
                     phase="clarify",
                     last_rule_id=None,
                     debug=debug,
@@ -416,12 +417,13 @@ def handle_turn(
     current_slots = merge_slots(current_slots, extract_slots(text, req_fields), req_fields)
     if classed.get("unclear") and not intents["open_ticket"]:
         debug = _debug(classed, sentiment, "clarify")
+        hint = str(classed.get("clarify_hint") or "").strip()
+        if not hint:
+            hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
+        reply_text = hint if hint.startswith("Size") else f"Talebinizi daha doğru yönlendirebilmem için bir sorum var: {hint}"
         return _with_llm_reply(
             TurnResult(
-                reply=(
-                    "Talebinizi daha doğru yönlendirebilmem için bir sorum var: "
-                    + str(classed.get("clarify_hint") or "")
-                ),
+                reply=reply_text,
                 phase="clarify",
                 last_rule_id=None,
                 debug=debug,
