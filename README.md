@@ -74,10 +74,27 @@ python src\train_itsm_nlu.py
 python src\eval_dialogues.py
 ```
 
-### 4. Uygulamayı Başlatma
+### 4. Uygulamayı Başlatma (React + FastAPI)
+
+**Terminal 1 — API:**
 ```powershell
-streamlit run src\app.py
+uvicorn src.api:app --reload --host 127.0.0.1 --port 8000
 ```
+
+**Terminal 2 — React UI:**
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Tarayıcıda `http://localhost:5173` adresini açın.
+
+**Demo hesaplar:**
+- Yönetici: `admin@kurumsal.local` / `admin123`
+- Kullanıcı: `kullanici@kurumsal.local` / `kullanici123`
+
+> *Eski Streamlit arayüzü hâlâ `streamlit run src\app.py` ile çalıştırılabilir (legacy).*
 
 ---
 

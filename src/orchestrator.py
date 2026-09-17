@@ -16,7 +16,10 @@ from slots import (
     missing_fields,
     next_prompt,
 )
+from priority import infer_priority
 from solutions import find_solutions, format_solution, record_feedback
+from sap_router import classification_from_solution, user_refuses_clarify
+from ticket_rag import find_similar_resolved_tickets, format_similar_ticket_payload
 from summaries import build_manager_copy, llm_enabled
 from taxonomy import classify_request, path_line
 from tickets import append_followup, create_ticket, update_status
@@ -31,6 +34,7 @@ class TurnResult:
     debug: dict = field(default_factory=dict)
     slots: dict = field(default_factory=dict)
     classification: dict | None = None
+    similar_tickets: list[dict] = field(default_factory=list)
 
 
 def _urgency(sentiment: str, high_risk: bool, impact: str = "", priority: str = "") -> str:
@@ -119,8 +123,20 @@ def _open_itsm_ticket(
         slots=slots,
         solution_ids=solution_ids,
     )
+    priority = str(classification.get("priority") or infer_priority(
+        ask,
+        talep_turu=str(classification.get("talep_turu_label") or ""),
+        high_risk=sentiment["high_risk"],
+        sentiment=sentiment["label"],
+    ))
     return create_ticket(
-        urgency=_urgency(sentiment["label"], sentiment["high_risk"], slots.get("impact", "")),
+        urgency=_urgency(
+            sentiment["label"],
+            sentiment["high_risk"],
+            slots.get("impact", ""),
+            priority=priority,
+        ),
+        priority=priority,
         customer_ask=ask,
         why_unresolved=why,
         summary_bullets=copy["summary_bullets"],
@@ -157,14 +173,49 @@ def _ticket_reply(ticket: dict) -> str:
         f"✅ **Talebiniz Kaydedildi:** {ticket['id']}\n\n"
         f"📌 **Sınıf:** {path}\n"
         f"📋 **Kayıt Bilgileri:** {fields_line}\n"
-        f"🏢 **Atanan Kuyruk:** {ticket.get('birim_label') or 'İlgili birim'} (Öncelik: {ticket.get('urgency', 'medium').upper()})"
+        f"🏢 **Atanan Kuyruk:** {ticket.get('birim_label') or 'İlgili birim'} "
+        f"(Öncelik: {ticket.get('priority') or ticket.get('urgency', 'medium')})"
     )
 
 
-def _suggest_reply(classification: dict, hits: list[dict], user_text: str = "") -> str:
+def _rag_answer(user_text: str, similar: list[dict], hits: list[dict]) -> str | None:
+    kb = hits[0] if hits else None
+    try:
+        from llm_engine import fallback_answer_from_resolved_tickets, synthesize_from_resolved_tickets
+
+        llm_text = synthesize_from_resolved_tickets(user_text, similar, kb_solution=kb)
+        if llm_text:
+            return llm_text
+        return fallback_answer_from_resolved_tickets(user_text, similar) or None
+    except Exception:
+        return None
+
+
+def _suggest_reply(
+    classification: dict,
+    hits: list[dict],
+    user_text: str = "",
+    similar_tickets: list[dict] | None = None,
+) -> str:
     path = path_line(classification)
     blocks = [f"🔍 **Talebinizi şöyle sınıflandırdım:** {path}"]
-    if hits:
+    similar = similar_tickets or []
+
+    if similar:
+        top = similar[0]
+        ticket = top.get("ticket") if isinstance(top.get("ticket"), dict) else top
+        pct = top.get("similarity_pct") or round(float(top.get("score", 0)) * 100)
+        blocks.append(
+            f"📎 **Benzer çözülmüş kayıt:** `{ticket.get('id', '—')}` "
+            f"(%{pct} benzerlik) — mesajlaşma geçmişi sohbet panelinde gösteriliyor."
+        )
+        rag_text = _rag_answer(user_text, similar, hits)
+        if rag_text:
+            blocks.append(f"**🧠 Geçmiş kayıtlara dayalı öneri:**\n\n{rag_text}")
+        elif hits:
+            for row in hits:
+                blocks.append(format_solution(row, user_text=user_text))
+    elif hits:
         for row in hits:
             blocks.append(format_solution(row, user_text=user_text))
     else:
@@ -190,7 +241,7 @@ def _collect_or_open(
     req_fields = get_required_fields_for_surec(surec_key)
     
     merged = merge_slots(slots, extract_slots(text, req_fields), req_fields)
-    prompt = next_prompt(merged, req_fields)
+    prompt = next_prompt(merged, req_fields, surec_key)
     
     if prompt:
         debug = _debug(classification, sentiment, "collect_fields")
@@ -254,8 +305,20 @@ def handle_turn(
         for message in history
         if message.get("role") == "user"
     )
-    incoming = classify_request(" ".join(part for part in (prior, text) if part))
-    classed = _merge_class(classification, incoming)
+    full_context = " ".join(part for part in (prior, text) if part)
+    incoming = classify_request(full_context)
+    if phase == "collect_fields" and classification and not classification.get("unclear"):
+        classed = classification
+    else:
+        classed = _merge_class(classification, incoming)
+    if classed and not classed.get("unclear"):
+        classed = dict(classed)
+        classed["priority"] = infer_priority(
+            " ".join(part for part in (prior, text) if part),
+            talep_turu=str(classed.get("talep_turu_label") or ""),
+            high_risk=sentiment["high_risk"],
+            sentiment=sentiment["label"],
+        )
     
     surec_key = str(classed.get("surec") or "")
     req_fields = get_required_fields_for_surec(surec_key)
@@ -391,23 +454,33 @@ def handle_turn(
         return _with_llm_reply(result, text)
 
     if phase == "clarify":
-        if incoming.get("unclear") and not intents["open_ticket"]:
-            debug = _debug(classed, sentiment, "clarify")
-            hint = str(classed.get("clarify_hint") or "").strip()
-            if not hint:
-                hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
-            reply_text = hint if hint.startswith("Size") else f"Talebinizi tam netleştiremedim. {hint}"
-            return _with_llm_reply(
-                TurnResult(
-                    reply=reply_text,
-                    phase="clarify",
-                    last_rule_id=None,
-                    debug=debug,
-                    slots=merge_slots(current_slots, extract_slots(text, req_fields), req_fields),
-                    classification=classed,
-                ),
-                text,
+        if incoming.get("unclear") and not intents["open_ticket"] and not user_refuses_clarify(text):
+            probe_hits = find_solutions(
+                full_context,
+                birim=str(classed.get("birim") or ""),
+                surec=str(classed.get("surec") or ""),
             )
+            if probe_hits:
+                classed = classification_from_solution(probe_hits[0])
+                surec_key = str(classed.get("surec") or "")
+                req_fields = get_required_fields_for_surec(surec_key)
+            else:
+                debug = _debug(classed, sentiment, "clarify")
+                hint = str(classed.get("clarify_hint") or "").strip()
+                if not hint:
+                    hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'SAP MM malzeme hatası', 'İzin talebi' vb.)"
+                reply_text = hint if hint.startswith("Size") else f"Talebinizi tam netleştiremedim. {hint}"
+                return _with_llm_reply(
+                    TurnResult(
+                        reply=reply_text,
+                        phase="clarify",
+                        last_rule_id=None,
+                        debug=debug,
+                        slots=merge_slots(current_slots, extract_slots(text, req_fields), req_fields),
+                        classification=classed,
+                    ),
+                    text,
+                )
         classed = _merge_class(classed, incoming)
         surec_key = str(classed.get("surec") or "")
         req_fields = get_required_fields_for_surec(surec_key)
@@ -416,51 +489,76 @@ def handle_turn(
     # New / clarified request
     current_slots = merge_slots(current_slots, extract_slots(text, req_fields), req_fields)
     if classed.get("unclear") and not intents["open_ticket"]:
-        debug = _debug(classed, sentiment, "clarify")
-        hint = str(classed.get("clarify_hint") or "").strip()
-        if not hint:
-            hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
-        reply_text = hint if hint.startswith("Size") else f"Talebinizi daha doğru yönlendirebilmem için bir sorum var: {hint}"
-        return _with_llm_reply(
-            TurnResult(
-                reply=reply_text,
-                phase="clarify",
-                last_rule_id=None,
-                debug=debug,
-                slots=current_slots,
-                classification=classed,
-            ),
-            text,
-        )
+        probe_hits = find_solutions(full_context)
+        if probe_hits:
+            classed = classification_from_solution(probe_hits[0])
+            surec_key = str(classed.get("surec") or "")
+            req_fields = get_required_fields_for_surec(surec_key)
+        elif not user_refuses_clarify(text):
+            debug = _debug(classed, sentiment, "clarify")
+            hint = str(classed.get("clarify_hint") or "").strip()
+            if not hint:
+                hint = "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'SAP MM malzeme hatası', 'İzin talebi' vb.)"
+            reply_text = hint if hint.startswith("Size") else f"Talebinizi daha doğru yönlendirebilmem için bir sorum var: {hint}"
+            return _with_llm_reply(
+                TurnResult(
+                    reply=reply_text,
+                    phase="clarify",
+                    last_rule_id=None,
+                    debug=debug,
+                    slots=current_slots,
+                    classification=classed,
+                ),
+                text,
+            )
 
     hits = []
+    similar_raw: list[dict] = []
+    similar_payload: list[dict] = []
     if not sentiment["high_risk"]:
         hits = find_solutions(
-            text,
+            full_context,
             birim=str(classed.get("birim") or ""),
             surec=surec_key,
         )
+        similar_raw = find_similar_resolved_tickets(
+            full_context,
+            surec=surec_key,
+            birim=str(classed.get("birim") or ""),
+            limit=2,
+        )
+        similar_payload = [format_similar_ticket_payload(match) for match in similar_raw]
     solution_ids = [str(h.get("id")) for h in hits if h.get("id")]
     want_ticket = intents["open_ticket"] or sentiment["high_risk"]
-    
-    if hits and not want_ticket:
-        sid = solution_ids[0]
-        debug = _debug(classed, sentiment, "suggest_solution", {"solution_id": sid})
+
+    has_self_service = bool(hits or similar_raw)
+    if has_self_service and not want_ticket:
+        sid = solution_ids[0] if solution_ids else None
+        debug = _debug(
+            classed,
+            sentiment,
+            "suggest_solution",
+            {
+                "solution_id": sid,
+                "similar_ticket_id": (similar_payload[0] or {}).get("id") if similar_payload else None,
+            },
+        )
         return _with_llm_reply(
             TurnResult(
-                reply=_suggest_reply(classed, hits, user_text=text),
+                reply=_suggest_reply(classed, hits, user_text=text, similar_tickets=similar_raw),
                 phase="suggest_solution",
                 last_rule_id=sid,
                 debug=debug,
                 slots=current_slots,
                 classification=classed,
+                similar_tickets=similar_payload,
             ),
             text,
         )
 
     intro = ""
-    if hits:
-        intro = _suggest_reply(classed, hits, user_text=text)
+    if hits or similar_raw:
+        intro = _suggest_reply(classed, hits, user_text=text, similar_tickets=similar_raw)
     why = (
         "Yüksek risk/öncelik; self-servis atlandı."
         if sentiment["high_risk"]
@@ -477,4 +575,6 @@ def handle_turn(
         why=why,
         intro=intro,
     )
+    if similar_payload:
+        result.similar_tickets = similar_payload
     return _with_llm_reply(result, text)

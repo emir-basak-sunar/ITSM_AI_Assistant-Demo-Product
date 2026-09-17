@@ -84,7 +84,7 @@
     ],
     "netlestirme_sorusu": "Kullanıcı için standart erişim paketi mi yeterli, yoksa ek özel sistem/uygulama erişimleri de gerekiyor mu?"
   },
-  "i̇zin_i̇ptal_degisiklik": {
+  "izin_iptal_degisiklik": {
     "surec_label": "İzin İptal/Değişiklik",
     "birim_label": "İnsan Kaynakları",
     "modul_label": "İzin Yönetimi",
@@ -305,7 +305,7 @@
     ],
     "netlestirme_sorusu": "Hasarlı mobilyanın türü nedir ve hasarın boyutunu gösteren bir fotoğraf paylaşabilir misiniz?"
   },
-  "i̇nternet_baglanti_sorunu": {
+  "internet_baglanti_sorunu": {
     "surec_label": "İnternet Bağlantı Sorunu",
     "birim_label": "Bilgi Teknolojileri",
     "modul_label": "Ağ/Network",
@@ -317,7 +317,7 @@
     ],
     "netlestirme_sorusu": "Bu internet kesintisi sadece sizin cihazınızda mı yoksa kattaki diğer kişilerde de var mı?"
   },
-  "yillik_i̇zin_talebi_bakiye_sorgulama": {
+  "yillik_izin_talebi_bakiye_sorgulama": {
     "surec_label": "Yıllık İzin Talebi/Bakiye Sorgulama",
     "birim_label": "İnsan Kaynakları",
     "modul_label": "İzin Yönetimi",

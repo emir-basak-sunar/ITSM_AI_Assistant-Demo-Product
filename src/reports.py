@@ -132,8 +132,25 @@ def build_unit_summary(birim: str = "") -> str:
     return "\n".join(lines)
 
 
-def run_queued_jobs() -> list[dict]:
+def run_queued_jobs(*, allow_empty_run: bool = True) -> list[dict]:
+    """Run queued report jobs. If queue is empty, create a daily summary job first."""
     jobs = load_jobs()
+    has_queued = any(j.get("status") == "queued" for j in jobs)
+    if not has_queued and allow_empty_run:
+        jobs.append(
+            {
+                "id": _next_id(jobs),
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "command": "Günlük ITSM özet raporu (yönetici paneli)",
+                "birim": "",
+                "requested_by": "admin_panel",
+                "status": "queued",
+                "result": "",
+                "run_at": "",
+            }
+        )
+        _rewrite(jobs)
+
     ran: list[dict] = []
     stamp = datetime.now().isoformat(timespec="seconds")
     for job in jobs:

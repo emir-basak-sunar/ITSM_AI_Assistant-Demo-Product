@@ -121,7 +121,7 @@ DIALOGUES = [
                 "action": "collect_fields",
             },
             {
-                "text": "3. kat İstanbul ofis, tüm ekip etkileniyor",
+                "text": "kullanici ahmet.yilmaz, timeout hatasi, laptop, turk telekom",
                 "action": "ticket_open",
             },
         ],
@@ -142,7 +142,11 @@ DIALOGUES = [
         "notes_contains": "8821",
         "turns": [
             {
-                "text": "VPN bağlanamıyorum talep aç laptop 2. kat yalnız ben",
+                "text": "VPN bağlanamıyorum talep aç",
+                "action": "collect_fields",
+            },
+            {
+                "text": "kullanici ahmet.yilmaz timeout hatasi laptop turk telekom",
                 "action": "ticket_open",
             },
             {
@@ -187,7 +191,7 @@ DIALOGUES = [
                 "action": "collect_fields",
             },
             {
-                "text": "Maslak Ofis 3. kat yalnız ben",
+                "text": "sicil 12345, Maslak Ofis 3. kat dün kaybettim, IT departmanı",
                 "action": "ticket_open",
             }
         ],
@@ -201,7 +205,7 @@ DIALOGUES = [
                 "action": "collect_fields",
             },
             {
-                "text": "İstanbul Merkez Ofis 1500 TL yalnız ben",
+                "text": "1500 TL iş seyahati avansı, yönetici onaylı, IBAN TR123456",
                 "action": "ticket_open",
             }
         ],

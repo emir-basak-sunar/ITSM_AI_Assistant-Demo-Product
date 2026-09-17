@@ -675,14 +675,14 @@ def _reset_chat():
 # -------------------------------------------------------------
 # Top Hero Header (Floating Island)
 # -------------------------------------------------------------
-llm_badge = "✨ Gemini LLM Aktif" if is_llm_active() else "🌿 Hibrit Sistem Aktif"
+llm_badge = "✨ Nemotron LLM Aktif" if is_llm_active() else "🌿 Hibrit Sistem Aktif"
 
 st.markdown(
     f"""
 <div class="hero-island">
   <div>
     <h1 class="hero-title">ITSM AI Asistanı & Yönetici Kokpiti</h1>
-    <p class="hero-subtitle">Doğal Dil Anlama · Gemini AI Çözüm Sentezi · Dinamik Veri Tamamlama · 4 Kademeli Taksonomi · Günlük Rapor JOB</p>
+    <p class="hero-subtitle">Doğal Dil Anlama · Nemotron AI Çözüm Sentezi · Dinamik Veri Tamamlama · 4 Kademeli Taksonomi · Günlük Rapor JOB</p>
   </div>
   <div style="display:flex; align-items:center; gap:0.5rem;">
     <span class="badge-online">{llm_badge}</span>

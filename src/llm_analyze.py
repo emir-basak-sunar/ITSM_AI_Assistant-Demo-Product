@@ -54,7 +54,7 @@ def generate_record_copy(
     thread_excerpt: str,
     timeout: float = 4.0,
 ) -> dict[str, Any] | None:
-    """Return summary_bullets + handoff_notes using Gemini / LLM, or None to use templates."""
+    """Return summary_bullets + handoff_notes using LLM, or None to use templates."""
     prompt = f"""
 Kurumsal ITSM bilet supervisor özeti oluştur.
 Sadece geçerli bir JSON döndür. Markdown veya ekstra açıklama yazma.
@@ -118,7 +118,7 @@ def rewrite_customer_reply(
     canned_reply: str,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> str | None:
-    """Rewrite the already-decided reply using Gemini / LLM. None = keep the canned text."""
+    """Rewrite the already-decided reply using LLM. None = keep the canned text."""
     canned_reply = (canned_reply or "").strip()
     if not canned_reply:
         return None

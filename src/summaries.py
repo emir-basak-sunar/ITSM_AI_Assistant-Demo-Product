@@ -21,7 +21,7 @@ def conversation_excerpt(history: Iterable[dict], latest_user: str, limit: int =
 
 
 def llm_enabled() -> bool:
-    return os.environ.get("ASSISTANT_USE_LLM", "").strip() == "1"
+    return os.environ.get("ASSISTANT_USE_LLM", "1").strip().lower() in {"1", "true", "yes"}
 
 
 def build_manager_copy(

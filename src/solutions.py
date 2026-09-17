@@ -12,18 +12,23 @@ from text_norm import fold_tr
 
 ROOT = Path(__file__).resolve().parent.parent
 SOLUTIONS_PATH = ROOT / "data" / "solutions.jsonl"
+SAP_SOLUTIONS_PATH = ROOT / "data" / "sap_solutions.jsonl"
 FEEDBACK_PATH = ROOT / "data" / "solution_feedback.jsonl"
 
 
-def load_solutions() -> list[dict]:
-    if not SOLUTIONS_PATH.exists():
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
         return []
     rows: list[dict] = []
-    for line in SOLUTIONS_PATH.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if not line:
-            continue
-        rows.append(json.loads(line))
+        if line:
+            rows.append(json.loads(line))
+    return rows
+
+
+def load_solutions() -> list[dict]:
+    rows = _read_jsonl(SOLUTIONS_PATH) + _read_jsonl(SAP_SOLUTIONS_PATH)
     return rows
 
 
@@ -67,21 +72,19 @@ def get_solution_stats(solution_id: str) -> dict:
     helpful = sum(1 for f in feedbacks if f.get("is_helpful"))
     unhelpful = sum(1 for f in feedbacks if not f.get("is_helpful"))
     total = helpful + unhelpful
-    
-    # Baseline simulated realistic rating for new solutions without extensive user votes
-    base_helpful = 24
-    base_total = 26
-    
-    effective_helpful = helpful + base_helpful
-    effective_total = total + base_total
-    rate = round((effective_helpful / effective_total) * 100, 1)
-    
+    rate = round((helpful / total) * 100, 1) if total else 0.0
+
+    if total:
+        rating_display = f"%{rate:.0f} Başarı ({total} geri bildirim)"
+    else:
+        rating_display = "Henüz geri bildirim yok"
+
     return {
         "helpful": helpful,
         "unhelpful": unhelpful,
         "total_votes": total,
         "success_rate": rate,
-        "rating_display": f"%{rate:.0f} Başarı ({effective_total} Çözüm)",
+        "rating_display": rating_display,
     }
 
 
@@ -92,7 +95,7 @@ def get_feedback_analytics() -> dict:
     helpful_n = sum(1 for f in feedbacks if f.get("is_helpful"))
     unhelpful_n = total_feedbacks - helpful_n
     
-    overall_rate = round((helpful_n / total_feedbacks * 100), 1) if total_feedbacks > 0 else 92.5
+    overall_rate = round((helpful_n / total_feedbacks * 100), 1) if total_feedbacks > 0 else 0.0
     return {
         "total_feedback": total_feedbacks,
         "helpful_count": helpful_n,
@@ -109,7 +112,7 @@ def _score(text: str, row: dict) -> int:
     keywords = [fold_tr(str(k)) for k in (row.get("keywords") or [])]
     title = fold_tr(str(row.get("title") or ""))
     surec_label = fold_tr(str(row.get("surec_label") or ""))
-    
+
     score = sum(2 for kw in keywords if kw and (kw in lowered or fold_tr(kw) in lowered))
     if title and title in lowered:
         score += 4
@@ -118,6 +121,14 @@ def _score(text: str, row: dict) -> int:
     unit = fold_tr(str(row.get("birim_label") or row.get("birim") or ""))
     if unit and unit in lowered:
         score += 1
+
+    if "sap" in lowered and str(row.get("birim") or "") == "sap_erp":
+        score += 3
+    if "mm" in lowered and str(row.get("modul") or "") == "sap_mm":
+        score += 4
+    if any(token in lowered for token in ("karakter", "mecburi", "maximum", "max ")):
+        if "karakter" in " ".join(keywords) or "field" in " ".join(keywords):
+            score += 5
     return score
 
 
@@ -182,7 +193,7 @@ def format_solution(row: dict, user_text: str = "") -> str:
     stats = get_solution_stats(sid)
     rating_badge = f"⭐ {stats['rating_display']}"
 
-    # Try LLM Engine first if active (Gemini / Groq)
+    # Try LLM Engine first if active (NVIDIA Nemotron)
     try:
         from llm_engine import synthesize_ai_troubleshooting
         llm_text = synthesize_ai_troubleshooting(user_text, row) if user_text else None

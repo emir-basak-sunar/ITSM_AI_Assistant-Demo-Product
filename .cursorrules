@@ -7,8 +7,10 @@ Repo: `nlu-insight-lab`. Product: **ITSM Asistanı**, an AI-supported ITSM chatb
 - Do not bring back marketplace returns, CFPB, or live ServiceNow APIs unless asked.
 
 ## Stack (do not change without asking)
-Python 3.10+, Streamlit, scikit-learn, JSONL tickets.
-No TypeScript, no extra web framework, no database unless explicitly requested.
+Python 3.10+, FastAPI, scikit-learn, JSONL tickets.
+React + TypeScript (Vite) frontend in `frontend/`.
+Legacy Streamlit UI: `src/app.py` (deprecated; prefer React).
+No database unless explicitly requested.
 
 ## Architecture
 Keep these layers separate; do not dump logic into `app.py`:
@@ -21,7 +23,8 @@ Keep these layers separate; do not dump logic into `app.py`:
 - `orchestrator.py` — turn decision
 - `tickets.py` / `summaries.py` — persistence and admin brief
 - `auth.py` — local JSONL accounts
-- `app.py` — UI only
+- `api.py` — FastAPI REST for React client
+- `app.py` — legacy Streamlit UI (deprecated)
 
 The LLM (`llm_analyze.py`, Ollama) is optional and must not decide ticket vs self-serve. Default summaries are templates.
 

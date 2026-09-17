@@ -72,6 +72,7 @@ def create_ticket(
     impact: str = "",
     slots: dict | None = None,
     solution_ids: list[str] | None = None,
+    priority: str = "Orta",
     kind: str = "ticket",
 ) -> dict:
     existing = load_tickets()
@@ -82,12 +83,14 @@ def create_ticket(
     loc_val = location or slots_dict.get("location") or slots_dict.get("ofis_lokasyon") or slots_dict.get("yazici_lokasyon") or slots_dict.get("lokasyon_kat_oda") or slots_dict.get("teslimat_lokasyonu") or ""
     impact_val = impact or slots_dict.get("impact") or slots_dict.get("etkilenen_kisi_sayisi") or ""
     
+    created_at = datetime.now().isoformat(timespec="seconds")
     ticket = {
         "id": _next_id(existing),
-        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "created_at": created_at,
         "kind": kind,
         "status": "open",
         "urgency": urgency,
+        "priority": priority or "Orta",
         "sentiment": sentiment,
         "customer_ask": customer_ask.strip(),
         "why_unresolved": why_unresolved,
@@ -114,8 +117,24 @@ def create_ticket(
             for part in (talep_turu_label, birim_label, modul_label, surec_label)
             if part
         ),
+        "messages": [
+            {
+                "role": "user",
+                "content": customer_ask.strip(),
+                "at": created_at,
+            }
+        ],
+        "resolution_summary": "",
+        "resolved_at": "",
     }
-    return save_ticket(ticket)
+    saved = save_ticket(ticket)
+    try:
+        from ticket_rag import invalidate_index
+
+        invalidate_index()
+    except Exception:
+        pass
+    return saved
 
 
 def append_followup(ticket_id: str, text: str) -> dict | None:
@@ -131,6 +150,9 @@ def append_followup(ticket_id: str, text: str) -> dict | None:
         followups = list(ticket.get("followups") or [])
         followups.append({"at": stamp, "text": note})
         ticket["followups"] = followups
+        messages = list(ticket.get("messages") or [])
+        messages.append({"role": "user", "content": note, "at": stamp})
+        ticket["messages"] = messages
         existing = str(ticket.get("handoff_notes") or "").rstrip()
         ticket["handoff_notes"] = existing + f"\n\nFollow-up ({stamp}): {note}"
         updated = ticket
@@ -138,23 +160,49 @@ def append_followup(ticket_id: str, text: str) -> dict | None:
     if updated is None:
         return None
     _rewrite(tickets)
+    try:
+        from ticket_rag import invalidate_index
+
+        invalidate_index()
+    except Exception:
+        pass
     return updated
 
 
-def update_status(ticket_id: str, status: str) -> dict | None:
+def update_status(
+    ticket_id: str,
+    status: str,
+    *,
+    resolution_summary: str = "",
+) -> dict | None:
     allowed = {"open", "in_progress", "resolved"}
     if status not in allowed:
         raise ValueError(f"Unknown status: {status}")
     tickets = load_tickets()
     updated = None
+    stamp = datetime.now().isoformat(timespec="seconds")
     for ticket in tickets:
         if ticket.get("id") == ticket_id:
             ticket["status"] = status
+            if status == "resolved":
+                ticket["resolved_at"] = stamp
+                summary = (resolution_summary or ticket.get("recommended_next_step") or "").strip()
+                if summary:
+                    ticket["resolution_summary"] = summary
+                    messages = list(ticket.get("messages") or [])
+                    messages.append({"role": "agent", "content": summary, "at": stamp})
+                    ticket["messages"] = messages
             updated = ticket
             break
     if updated is None:
         return None
     _rewrite(tickets)
+    try:
+        from ticket_rag import invalidate_index
+
+        invalidate_index()
+    except Exception:
+        pass
     return updated
 
 

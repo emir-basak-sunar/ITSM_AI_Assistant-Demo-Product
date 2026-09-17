@@ -25,7 +25,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "ofis_ekipmani",
         "Ofis Ekipmanı",
@@ -47,7 +47,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "satinalma_malzeme",
         "Satınalma/Malzeme",
@@ -97,7 +97,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "arıza",
         "Arıza (Incident)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "bina_tesis_bakim",
         "Bina/Tesis Bakım",
@@ -124,7 +124,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "guvenlik__ulasim",
         "Güvenlik & Ulaşım",
@@ -147,7 +147,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "arıza",
         "Arıza (Incident)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "ofis_ekipmani",
         "Ofis Ekipmanı",
@@ -198,11 +198,11 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇nsan_kaynaklari",
+        "insan_kaynaklari",
         "İnsan Kaynakları",
-        "i̇zin_yonetimi",
+        "izin_yonetimi",
         "İzin Yönetimi",
-        "i̇zin_i̇ptal_degisiklik",
+        "izin_iptal_degisiklik",
         "İzin İptal/Değişiklik",
         (
             "izin iptal",
@@ -423,7 +423,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "bilgi",
         "Bilgi Talebi (Information)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "guvenlik__ulasim",
         "Güvenlik & Ulaşım",
@@ -466,7 +466,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇nsan_kaynaklari",
+        "insan_kaynaklari",
         "İnsan Kaynakları",
         "bordro__ozluk",
         "Bordro & Özlük",
@@ -552,7 +552,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "arıza",
         "Arıza (Incident)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "bina_tesis_bakim",
         "Bina/Tesis Bakım",
@@ -601,7 +601,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "hizmet",
         "Hizmet Talebi (Service Request)",
-        "i̇dari_i̇sler",
+        "idari_isler",
         "İdari İşler",
         "satinalma_malzeme",
         "Satınalma/Malzeme",
@@ -628,7 +628,7 @@ PATHS: tuple[TaxonomyPath, ...] = (
         "Bilgi Teknolojileri",
         "ag_network",
         "Ağ/Network",
-        "i̇nternet_baglanti_sorunu",
+        "internet_baglanti_sorunu",
         "İnternet Bağlantı Sorunu",
         (
             "internet",
@@ -645,11 +645,11 @@ PATHS: tuple[TaxonomyPath, ...] = (
     TaxonomyPath(
         "bilgi",
         "Bilgi Talebi (Information)",
-        "i̇nsan_kaynaklari",
+        "insan_kaynaklari",
         "İnsan Kaynakları",
-        "i̇zin_yonetimi",
+        "izin_yonetimi",
         "İzin Yönetimi",
-        "yillik_i̇zin_talebi_bakiye_sorgulama",
+        "yillik_izin_talebi_bakiye_sorgulama",
         "Yıllık İzin Talebi/Bakiye Sorgulama",
         (
             "izin bakiyesi",
@@ -700,18 +700,18 @@ PROCESS_ALIASES = {
     "bordro vergi matrahi itirazi": "ozluk_calisma_belgesi_talebi",
     "bes (bireysel emeklilik) kesintisi talebi": "ozluk_calisma_belgesi_talebi",
     # HR - İzin
-    "doğum/analık izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "dogum/analik izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "babalık izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "babalik izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "süt izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "sut izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "ücretsiz izin talebi": "i̇zin_i̇ptal_degisiklik",
-    "ucretsiz izin talebi": "i̇zin_i̇ptal_degisiklik",
-    "evlilik izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "vefat/mazeret izni talebi": "i̇zin_i̇ptal_degisiklik",
-    "sağlık raporu/istirahat bildirimi": "i̇zin_i̇ptal_degisiklik",
-    "saglik raporu/istirahat bildirimi": "i̇zin_i̇ptal_degisiklik",
+    "doğum/analık izni talebi": "izin_iptal_degisiklik",
+    "dogum/analik izni talebi": "izin_iptal_degisiklik",
+    "babalık izni talebi": "izin_iptal_degisiklik",
+    "babalik izni talebi": "izin_iptal_degisiklik",
+    "süt izni talebi": "izin_iptal_degisiklik",
+    "sut izni talebi": "izin_iptal_degisiklik",
+    "ücretsiz izin talebi": "izin_iptal_degisiklik",
+    "ucretsiz izin talebi": "izin_iptal_degisiklik",
+    "evlilik izni talebi": "izin_iptal_degisiklik",
+    "vefat/mazeret izni talebi": "izin_iptal_degisiklik",
+    "sağlık raporu/istirahat bildirimi": "izin_iptal_degisiklik",
+    "saglik raporu/istirahat bildirimi": "izin_iptal_degisiklik",
     # Finans - Masraf
     "döviz kuru farkı/uyumsuzluğu": "masraf_harcama_formu_onayi",
     "doviz kuru farki/uyumsuzlugu": "masraf_harcama_formu_onayi",
@@ -788,6 +788,15 @@ def _from_path(
 
 def classify_request(text: str, min_score: int = 2) -> dict:
     """Keyword path first; TF-IDF NLU model fallback."""
+    try:
+        from sap_router import classify_sap_request
+
+        sap = classify_sap_request(text)
+        if sap:
+            return sap
+    except Exception:
+        pass
+
     best: TaxonomyPath | None = None
     best_score = 0
     best_hits: list[str] = []
@@ -837,10 +846,19 @@ def classify_request(text: str, min_score: int = 2) -> dict:
         "path_label": "",
         "clarify_hint": (
             best.clarify_hint
-            if best
-            else "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'Fatura onayı', 'İzin talebi' vb.)"
+            if best and not _looks_like_sap(text)
+            else "Size hızlıca yardımcı olabilmem için yaşadığınız sorunu veya talebinizi biraz daha detaylandırabilir misiniz? (Örn: 'Laptop açılmıyor', 'VPN bağlanmıyor', 'SAP MM malzeme hatası', 'İzin talebi' vb.)"
         ),
     }
+
+
+def _looks_like_sap(text: str) -> bool:
+    try:
+        from sap_router import is_sap_context
+
+        return is_sap_context(text)
+    except Exception:
+        return "sap" in fold_tr(text)
 
 
 def path_line(classification: dict | None) -> str:
