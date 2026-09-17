@@ -33,8 +33,11 @@ export default function App() {
       <Sidebar active={page} onNavigate={setPage} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar page={page} />
-        <main className="flex-1">
-          {page === "chat" && <ChatPanel />}
+        <main className="relative flex-1">
+          {/* ChatPanel unmount edilmez — sayfa geçişlerinde mesajlar korunur */}
+          <div className={page === "chat" ? "h-full" : "hidden"}>
+            <ChatPanel />
+          </div>
           {page === "tickets" && <TicketsPage />}
           {page === "analytics" && <AnalyticsPage />}
           {page === "kb" && <KnowledgeBasePage />}

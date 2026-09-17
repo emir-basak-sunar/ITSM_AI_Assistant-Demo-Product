@@ -4,7 +4,9 @@ from text_norm import fold_tr
 
 OPEN_TICKET_PHRASES = (
     "ticket aç",
+    "ticket ac",
     "talep aç",
+    "talep ac",
     "kayıt aç",
     "kayit ac",
     "iş kaydı",
@@ -56,7 +58,7 @@ DECLINE_PHRASES = (
 
 def _hits(text: str, phrases: tuple[str, ...]) -> list[str]:
     lowered = fold_tr(text)
-    return [p for p in phrases if p in lowered]
+    return [p for p in phrases if fold_tr(p) in lowered]
 
 
 def looks_confirm(text: str) -> bool:
@@ -83,3 +85,33 @@ def detect_intents(text: str) -> dict:
             "still_unresolved": still_unresolved,
         },
     }
+
+
+def rejects_classification(text: str, classification: dict | None = None) -> bool:
+    """User says the current routing/classification is wrong."""
+    lowered = fold_tr(text)
+    markers = (
+        "de degil",
+        "degil sorun",
+        "vpn degil",
+        "vpn de degil",
+        "sorun vpn",
+        "alakasi yok",
+        "alakasiz",
+        "yanlis sinif",
+        "yanlis yonlendir",
+        "farkli sorun",
+        "baska sorun",
+        "ilgisi yok",
+        "konu degil",
+        "bundan degil",
+    )
+    if any(marker in lowered for marker in markers):
+        return True
+
+    label = fold_tr(str((classification or {}).get("surec_label") or ""))
+    for token in label.replace("→", " ").split():
+        token = token.strip()
+        if len(token) > 3 and token in lowered and "degil" in lowered:
+            return True
+    return False

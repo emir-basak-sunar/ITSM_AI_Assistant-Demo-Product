@@ -67,15 +67,45 @@ def _client_instance() -> chromadb.PersistentClient:
     return _client
 
 
-def get_collection():
-    """Chroma koleksiyonu — embedding Chroma'ya değil, bizim singleton'a bırakıldı."""
+def _invalidate_collection() -> None:
     global _collection
-    if _collection is None:
-        _collection = _client_instance().get_or_create_collection(
-            name=COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+    _collection = None
+
+
+def _is_stale_collection_error(exc: Exception) -> bool:
+    name = type(exc).__name__
+    message = str(exc).lower()
+    return name == "NotFoundError" or "does not exist" in message
+
+
+def get_collection():
+    """Chroma koleksiyonu — stale cache (uvicorn reload) otomatik yenilenir."""
+    global _collection
+    if _collection is not None:
+        try:
+            _collection.count()
+            return _collection
+        except Exception as exc:
+            if _is_stale_collection_error(exc):
+                _invalidate_collection()
+            else:
+                raise
+
+    _collection = _client_instance().get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
     return _collection
+
+
+def _collection_count() -> int:
+    try:
+        return get_collection().count()
+    except Exception as exc:
+        if not _is_stale_collection_error(exc):
+            raise
+        _invalidate_collection()
+        return get_collection().count()
 
 
 def _tickets_mtime() -> float:
@@ -119,7 +149,7 @@ def _refresh_stats_cache() -> dict:
     global _stats_cache
     tickets = _resolved_tickets()
     try:
-        count = get_collection().count() if tickets else 0
+        count = _collection_count() if tickets else 0
     except Exception:
         count = 0
     _stats_cache = {
@@ -156,16 +186,19 @@ def sync_resolved_tickets(tickets: list[dict] | None = None, *, force: bool = Fa
 
     mtime = _tickets_mtime()
     if not force and _sync_mtime == mtime and tickets:
-        existing = get_collection().count()
-        if existing >= len(tickets):
-            return existing
+        try:
+            existing = _collection_count()
+            if existing >= len(tickets):
+                return existing
+        except Exception:
+            _invalidate_collection()
 
     if force:
         try:
             _client_instance().delete_collection(COLLECTION_NAME)
         except Exception:
             pass
-        _collection = None
+        _invalidate_collection()
 
     collection = get_collection()
 
@@ -201,12 +234,23 @@ def sync_resolved_tickets(tickets: list[dict] | None = None, *, force: bool = Fa
         return 0
 
     embeddings = _embedder_instance().embed(documents)
-    collection.upsert(
-        ids=ids,
-        documents=documents,
-        embeddings=embeddings,
-        metadatas=metadatas,
-    )
+    try:
+        collection.upsert(
+            ids=ids,
+            documents=documents,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
+    except Exception as exc:
+        if not _is_stale_collection_error(exc):
+            raise
+        _invalidate_collection()
+        get_collection().upsert(
+            ids=ids,
+            documents=documents,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
     _sync_mtime = mtime
     _stats_cache = None
     return len(ids)
@@ -236,8 +280,8 @@ def query_similar(
         return []
 
     sync_resolved_tickets(tickets)
-    collection = get_collection()
-    if collection.count() == 0:
+    total = _collection_count()
+    if total == 0:
         return []
 
     query_text = (query or "").strip()
@@ -245,11 +289,25 @@ def query_similar(
         return []
 
     query_embedding = _embedder_instance().embed([query_text])
-    raw = collection.query(
-        query_embeddings=query_embedding,
-        n_results=min(max(limit * 3, limit), collection.count()),
-        include=["metadatas", "distances"],
-    )
+    try:
+        raw = get_collection().query(
+            query_embeddings=query_embedding,
+            n_results=min(max(limit * 3, limit), total),
+            include=["metadatas", "distances"],
+        )
+    except Exception as exc:
+        if not _is_stale_collection_error(exc):
+            raise
+        _invalidate_collection()
+        sync_resolved_tickets(tickets, force=True)
+        total = _collection_count()
+        if total == 0:
+            return []
+        raw = get_collection().query(
+            query_embeddings=query_embedding,
+            n_results=min(max(limit * 3, limit), total),
+            include=["metadatas", "distances"],
+        )
 
     ids = (raw.get("ids") or [[]])[0]
     distances = (raw.get("distances") or [[]])[0]
@@ -299,12 +357,12 @@ def query_similar(
 
 def reset_store() -> None:
     """Drop collection and clear sync cache (called when tickets change)."""
-    global _collection, _sync_mtime, _stats_cache
+    global _sync_mtime, _stats_cache
     try:
         _client_instance().delete_collection(COLLECTION_NAME)
     except Exception:
         pass
-    _collection = None
+    _invalidate_collection()
     _sync_mtime = -1.0
     _stats_cache = None
 

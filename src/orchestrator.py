@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from intents import detect_intents, looks_confirm, looks_decline
+from intents import detect_intents, looks_confirm, looks_decline, rejects_classification
 from reports import looks_report_command, queue_report_job
 from rules import force_ticket
 from sentiment import analyze_sentiment, looks_positive_resolution
@@ -52,6 +52,29 @@ def _primary_ask(history: list[dict], text: str) -> str:
             if ask:
                 return ask
     return (text or "").strip()
+
+
+def _unclear_classification(hint: str = "") -> dict:
+    default_hint = (
+        "Asıl sorununuzu bir cümleyle yazın. (Örn. PC arızası, yazılım hatası, SAP, yazıcı)"
+    )
+    return {
+        "unclear": True,
+        "score": 0,
+        "hits": [],
+        "source": "user_correction",
+        "model_confidence": 0.0,
+        "talep_turu": "",
+        "talep_turu_label": "",
+        "birim": "",
+        "birim_label": "",
+        "modul": "",
+        "modul_label": "",
+        "surec": "",
+        "surec_label": "",
+        "path_label": "",
+        "clarify_hint": hint or default_hint,
+    }
 
 
 def _merge_class(previous: dict | None, incoming: dict) -> dict:
@@ -236,14 +259,17 @@ def _collect_or_open(
     solution_ids: list[str],
     why: str,
     intro: str = "",
+    force_open: bool = False,
 ) -> TurnResult:
     surec_key = str(classification.get("surec") or "")
     req_fields = get_required_fields_for_surec(surec_key)
-    
-    merged = merge_slots(slots, extract_slots(text, req_fields), req_fields)
+
+    ask = _primary_ask(history, text)
+    merged = merge_slots(slots, extract_slots(ask, req_fields), req_fields)
+    merged = merge_slots(merged, extract_slots(text, req_fields), req_fields)
     prompt = next_prompt(merged, req_fields, surec_key)
-    
-    if prompt:
+
+    if prompt and not force_open:
         debug = _debug(classification, sentiment, "collect_fields")
         lead = intro.strip() + "\n\n" if intro.strip() else ""
         return TurnResult(
@@ -307,7 +333,13 @@ def handle_turn(
     )
     full_context = " ".join(part for part in (prior, text) if part)
     incoming = classify_request(full_context)
-    if phase == "collect_fields" and classification and not classification.get("unclear"):
+    user_rejects = rejects_classification(text, classification)
+    if (
+        phase == "collect_fields"
+        and classification
+        and not classification.get("unclear")
+        and not user_rejects
+    ):
         classed = classification
     else:
         classed = _merge_class(classification, incoming)
@@ -438,9 +470,41 @@ def handle_turn(
         )
 
     if phase == "collect_fields":
+        if user_rejects:
+            debug = _debug(classed, sentiment, "clarify")
+            return _with_llm_reply(
+                TurnResult(
+                    reply=(
+                        "Anladım, önceki yönlendirme yanlıştı. **Asıl sorununuzu** kısaca yazar mısınız?\n\n"
+                        "Kayıt açmamı isterseniz **talep aç** demeniz yeterli."
+                    ),
+                    phase="clarify",
+                    last_rule_id=None,
+                    debug=debug,
+                    slots={},
+                    classification=_unclear_classification(),
+                ),
+                text,
+            )
+
+        if intents["open_ticket"]:
+            result = _collect_or_open(
+                text=text,
+                history=history,
+                classification=classed,
+                sentiment=sentiment,
+                slots=current_slots,
+                customer_email=owner,
+                solution_ids=solution_ids,
+                why="Kullanıcı alan toplama sırasında kayıt açmayı talep etti.",
+                force_open=True,
+            )
+            return _with_llm_reply(result, text)
+
         missing = missing_fields(current_slots, req_fields)
         field_to_fill = missing[0] if missing else req_fields[0]
-        current_slots = apply_answer(current_slots, field_to_fill, text, req_fields)
+        if not rejects_classification(text, classification):
+            current_slots = apply_answer(current_slots, field_to_fill, text, req_fields)
         result = _collect_or_open(
             text=text,
             history=history,
@@ -454,6 +518,23 @@ def handle_turn(
         return _with_llm_reply(result, text)
 
     if phase == "clarify":
+        if user_rejects:
+            debug = _debug(classed, sentiment, "clarify")
+            return _with_llm_reply(
+                TurnResult(
+                    reply=(
+                        "Tamam, önceki sınıflandırmayı iptal ettim. "
+                        "**Gerçek sorununuzu** bir cümleyle yazar mısınız?"
+                    ),
+                    phase="clarify",
+                    last_rule_id=None,
+                    debug=debug,
+                    slots={},
+                    classification=_unclear_classification(),
+                ),
+                text,
+            )
+
         if incoming.get("unclear") and not intents["open_ticket"] and not user_refuses_clarify(text):
             probe_hits = find_solutions(
                 full_context,
