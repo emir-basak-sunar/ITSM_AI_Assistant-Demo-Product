@@ -30,6 +30,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   meta?: string;
+  nluSource?: string;
   priority?: string;
   similarTickets?: SimilarResolvedTicket[];
 }
@@ -63,6 +64,7 @@ export interface Ticket {
   birim_label?: string;
   created_at?: string;
   slots?: Record<string, string>;
+  resolution_summary?: string;
 }
 
 export interface Analytics {

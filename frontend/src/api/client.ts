@@ -135,9 +135,9 @@ export const api = {
   tickets: (token: string) =>
     request<Ticket[]>("/api/tickets", {}, token),
 
-  resolveTicket: (token: string, ticketId: string) =>
+  resolveTicket: (token: string, ticketId: string, resolutionSummary = "") =>
     request<Ticket>(
-      `/api/tickets/${ticketId}/status?status=resolved`,
+      `/api/tickets/${ticketId}/status?status=resolved&resolution_summary=${encodeURIComponent(resolutionSummary)}`,
       { method: "PATCH" },
       token,
     ),

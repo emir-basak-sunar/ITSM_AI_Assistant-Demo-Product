@@ -9,18 +9,57 @@ from tickets import load_tickets
 
 ROOT = Path(__file__).resolve().parent.parent
 SEED_PATH = ROOT / "data" / "resolved_tickets_seed.jsonl"
+CORPUS_PATH = ROOT / "data" / "rag_corpus.jsonl"
+SAP_QA_PATH = ROOT / "data" / "sap_module_qa.jsonl"
 MIN_SIMILARITY = 0.35
 
+# Eski seed / kayıt id'leri → taxonomy.py süreç id
+LEGACY_SUREC_IDS = {
+    "wifi_baglanti_sorunu": "wi-fi_baglanti_sorunu",
+    "yazici_fotokopi_ariza": "yazici_fotokopi_ariza_bildirimi",
+    "uygulama_hatasi": "uygulama_hatasi_outlook_teams_excel_vb",
+}
 
-def _load_seed_tickets() -> list[dict]:
-    if not SEED_PATH.exists():
+
+def canonical_surec(surec: str) -> str:
+    raw = (surec or "").strip()
+    if not raw:
+        return ""
+    mapped = LEGACY_SUREC_IDS.get(raw, raw)
+    try:
+        from taxonomy import path_by_surec
+
+        path = path_by_surec(mapped) or path_by_surec(raw)
+        if path:
+            return path.surec
+    except Exception:
+        pass
+    return mapped
+
+
+def surec_filter_values(surec: str) -> list[str]:
+    """Chroma metadata $in — BERT id + eski seed id'leri."""
+    values = {canonical_surec(surec), (surec or "").strip()}
+    for old, new in LEGACY_SUREC_IDS.items():
+        if surec in {old, new} or canonical_surec(surec) == new:
+            values.add(old)
+            values.add(new)
+    return [v for v in values if v]
+
+
+def _load_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
         return []
     rows: list[dict] = []
-    for line in SEED_PATH.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line:
             rows.append(json.loads(line))
     return rows
+
+
+def _load_seed_tickets() -> list[dict]:
+    return _load_jsonl(SEED_PATH) + _load_jsonl(CORPUS_PATH) + _load_jsonl(SAP_QA_PATH)
 
 
 def ticket_document(ticket: dict) -> str:
@@ -58,9 +97,9 @@ def resolved_tickets() -> list[dict]:
 
 
 def invalidate_index() -> None:
-    from vector_store import reset_store
+    from vector_store import mark_index_stale
 
-    reset_store()
+    mark_index_stale()
 
 
 def find_similar_resolved_tickets(

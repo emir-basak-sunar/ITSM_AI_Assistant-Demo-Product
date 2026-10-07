@@ -109,11 +109,14 @@ def _collection_count() -> int:
 
 
 def _tickets_mtime() -> float:
+    from ticket_rag import CORPUS_PATH, SAP_QA_PATH, SEED_PATH
     from tickets import TICKETS_PATH
 
-    if not TICKETS_PATH.exists():
-        return 0.0
-    return TICKETS_PATH.stat().st_mtime
+    stamps: list[float] = []
+    for path in (TICKETS_PATH, SEED_PATH, CORPUS_PATH, SAP_QA_PATH):
+        if path.exists():
+            stamps.append(path.stat().st_mtime)
+    return max(stamps) if stamps else 0.0
 
 
 def _resolved_tickets() -> list[dict]:
@@ -220,9 +223,12 @@ def sync_resolved_tickets(tickets: list[dict] | None = None, *, force: bool = Fa
             continue
         ids.append(ticket_id)
         documents.append(doc)
+        from ticket_rag import canonical_surec
+
         metadatas.append(
             {
-                "surec": str(ticket.get("surec") or ""),
+                "surec": canonical_surec(str(ticket.get("surec") or "")),
+                "surec_raw": str(ticket.get("surec") or ""),
                 "birim": str(ticket.get("birim") or ""),
                 "ticket_id": ticket_id,
             }
@@ -254,6 +260,52 @@ def sync_resolved_tickets(tickets: list[dict] | None = None, *, force: bool = Fa
     _sync_mtime = mtime
     _stats_cache = None
     return len(ids)
+
+
+def mark_index_stale() -> None:
+    """Next query re-syncs from JSONL/tickets without dropping Chroma."""
+    global _sync_mtime, _stats_cache
+    _sync_mtime = -1.0
+    _stats_cache = None
+
+
+def index_resolved_ticket(ticket: dict) -> bool:
+    """Upsert one resolved ticket (problem + solution) into Chroma."""
+    if str(ticket.get("status") or "") != "resolved":
+        return False
+    ticket_id = str(ticket.get("id") or "").strip()
+    doc = _ticket_document(ticket)
+    if not ticket_id or not doc.strip():
+        return False
+    from ticket_rag import canonical_surec
+
+    metadata = {
+        "surec": canonical_surec(str(ticket.get("surec") or "")),
+        "surec_raw": str(ticket.get("surec") or ""),
+        "birim": str(ticket.get("birim") or ""),
+        "ticket_id": ticket_id,
+    }
+    embeddings = _embedder_instance().embed([doc])
+    try:
+        get_collection().upsert(
+            ids=[ticket_id],
+            documents=[doc],
+            embeddings=embeddings,
+            metadatas=[metadata],
+        )
+    except Exception as exc:
+        if not _is_stale_collection_error(exc):
+            raise
+        _invalidate_collection()
+        get_collection().upsert(
+            ids=[ticket_id],
+            documents=[doc],
+            embeddings=embeddings,
+            metadatas=[metadata],
+        )
+    global _stats_cache
+    _stats_cache = None
+    return True
 
 
 def _ticket_by_id(ticket_id: str) -> dict | None:
@@ -289,12 +341,36 @@ def query_similar(
         return []
 
     query_embedding = _embedder_instance().embed([query_text])
+    n_results = min(max(limit * 4, limit), total)
+
+    def _run_query(where: dict | None) -> dict:
+        kwargs: dict = {
+            "query_embeddings": query_embedding,
+            "n_results": n_results,
+            "include": ["metadatas", "distances"],
+        }
+        if where:
+            kwargs["where"] = where
+        return get_collection().query(**kwargs)
+
+    from ticket_rag import surec_filter_values
+
+    where_clause: dict | None = None
+    if surec:
+        values = surec_filter_values(surec)
+        if len(values) == 1:
+            where_clause = {"surec": values[0]}
+        elif values:
+            where_clause = {"surec": {"$in": values}}
+
     try:
-        raw = get_collection().query(
-            query_embeddings=query_embedding,
-            n_results=min(max(limit * 3, limit), total),
-            include=["metadatas", "distances"],
-        )
+        raw = _run_query(where_clause)
+        empty = not (raw.get("ids") or [[]])[0]
+        if empty and where_clause and birim:
+            raw = _run_query({"birim": birim})
+            empty = not (raw.get("ids") or [[]])[0]
+        if empty and where_clause:
+            raw = _run_query(None)
     except Exception as exc:
         if not _is_stale_collection_error(exc):
             raise
@@ -303,11 +379,8 @@ def query_similar(
         total = _collection_count()
         if total == 0:
             return []
-        raw = get_collection().query(
-            query_embeddings=query_embedding,
-            n_results=min(max(limit * 3, limit), total),
-            include=["metadatas", "distances"],
-        )
+        n_results = min(max(limit * 4, limit), total)
+        raw = _run_query(where_clause)
 
     ids = (raw.get("ids") or [[]])[0]
     distances = (raw.get("distances") or [[]])[0]

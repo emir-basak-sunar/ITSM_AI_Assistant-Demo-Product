@@ -787,7 +787,7 @@ def _from_path(
 
 
 def classify_request(text: str, min_score: int = 2) -> dict:
-    """Keyword path first; TF-IDF NLU model fallback."""
+    """NLU model first when available; keyword path as fallback."""
     try:
         from sap_router import classify_sap_request
 
@@ -809,25 +809,28 @@ def classify_request(text: str, min_score: int = 2) -> dict:
             best_score = score
             best = path
             best_hits = hits
-            
-    if best is not None and best_score >= min_score:
-        return _from_path(best, best_score, best_hits, "keyword")
 
     try:
-        from itsm_nlu import predict_surec
-        pred = predict_surec(text)
-        modeled = path_by_surec(str(pred.get("surec") or ""))
-        conf = float(pred.get("confidence") or 0.0)
-        if modeled is not None and conf >= 0.40:
-            return _from_path(
-                modeled,
-                max(best_score, 2),
-                best_hits,
-                "model",
-                model_confidence=conf,
-            )
+        from itsm_nlu import model_available, predict_surec
+
+        if model_available():
+            pred = predict_surec(text)
+            modeled = path_by_surec(str(pred.get("surec") or ""))
+            conf = float(pred.get("confidence") or 0.0)
+            backend = str(pred.get("backend") or "model")
+            if modeled is not None:
+                return _from_path(
+                    modeled,
+                    max(best_score, 2),
+                    best_hits,
+                    backend,
+                    model_confidence=conf,
+                )
     except Exception:
         pass
+
+    if best is not None and best_score >= min_score:
+        return _from_path(best, best_score, best_hits, "keyword")
 
     return {
         "unclear": True,

@@ -23,7 +23,7 @@ NVIDIA_BASE_URL = os.getenv(
 ).strip()
 NVIDIA_MODEL = os.getenv(
     "NVIDIA_MODEL",
-    "nvidia/nemotron-3-super-120b-a12b",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 ).strip()
 USE_LLM = os.getenv("ASSISTANT_USE_LLM", "1").strip().lower() in {"1", "true", "yes"}
 
@@ -84,9 +84,20 @@ def call_nvidia(
     return None
 
 
-def generate_llm_response(prompt: str, system_prompt: str = "") -> str | None:
+def generate_llm_response(
+    prompt: str,
+    system_prompt: str = "",
+    *,
+    timeout: float = 70.0,
+    max_tokens: int = 1024,
+) -> str | None:
     """Primary LLM caller — NVIDIA Nemotron."""
-    return call_nvidia(prompt, system_prompt)
+    return call_nvidia(
+        prompt,
+        system_prompt,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )
 
 
 def synthesize_ai_troubleshooting(user_text: str, solution_row: dict) -> str | None:
@@ -156,11 +167,11 @@ def synthesize_from_resolved_tickets(
             kb_hint = str(steps)
 
     sys_prompt = (
-        "Sen kurumsal ITSM destek asistanısın. Benzer çözülmüş kayıtlardan öğrenerek "
-        "kullanıcının yeni sorununa kişiselleştirilmiş çözüm üret.\n"
+        "Sen kurumsal ITSM L1 destek asistanısın. BERT ile seçilen süreçteki "
+        "benzer çözülmüş kayıtlardan RAG yaparsın.\n"
         "KURALLAR:\n"
-        "1. Geçmiş kayıtlardaki çözüm mantığını yeni duruma uyarla; birebir kopyalama.\n"
-        "2. 1-2 cümle empati + hangi geçmiş kayda dayandığını kısaca belirt.\n"
+        "1. Yalnızca verilen kayıtlardaki çözümü uyarla; uydurma.\n"
+        "2. 1-2 cümle empati ve hangi kayıt id'sine dayandığını yaz.\n"
         "3. Tam 3 numaralandırılmış adım yaz.\n"
         "4. Son cümle: 'Bu adımlar işe yaramazsa talep aç diyerek kayıt oluşturabilirsiniz.'\n"
         "5. Türkçe ve markdown kullan."
@@ -179,6 +190,113 @@ Ek bilgi bankası adımları:
 Lütfen geçmiş kayıtlardan yararlanarak 3 adımlık çözüm öner.
 """.strip()
 
+    return generate_llm_response(prompt, system_prompt=sys_prompt)
+
+
+def synthesize_followup_troubleshooting(
+    user_text: str,
+    history: list[dict],
+    similar_tickets: list[dict] | None = None,
+    kb_solution: dict | None = None,
+    classification: dict | None = None,
+) -> str | None:
+    """Continue the same incident: keep prior diagnosis, answer the user's objection."""
+    if not is_llm_active():
+        return None
+
+    thread_lines: list[str] = []
+    for item in (history or [])[-8:]:
+        role = str(item.get("role") or "user")
+        content = str(item.get("content") or "").strip()
+        if content:
+            thread_lines.append(f"{role}: {content}")
+    thread_lines.append(f"user: {user_text}")
+
+    context_blocks: list[str] = []
+    for idx, payload in enumerate((similar_tickets or [])[:2], start=1):
+        ticket = payload.get("ticket") if isinstance(payload.get("ticket"), dict) else payload
+        context_blocks.append(
+            f"Benzer kayıt #{idx} ({ticket.get('id', '—')}):\n"
+            f"Sorun: {ticket.get('customer_ask', '')}\n"
+            f"Çözüm: {ticket.get('resolution_summary') or ticket.get('recommended_next_step', '')}"
+        )
+
+    kb_hint = ""
+    if kb_solution:
+        steps = kb_solution.get("steps") or []
+        kb_hint = "\n".join(f"- {step}" for step in steps[:5]) if isinstance(steps, list) else str(steps)
+
+    classed = classification or {}
+    path = str(classed.get("path_label") or "")
+    sap = str(classed.get("birim") or "") == "sap_erp"
+    sap_extra = (
+        "SAP OB52'de dönem şirket kodu + hesap türü (A/D/K/M/S/+) bazında açılır; "
+        "yalnızca şirket kodunu açmak yetmeyebilir. FB50 genelde S (ana hesap) dönemine bakar. "
+        if sap
+        else ""
+    )
+
+    sys_prompt = (
+        "Sen kurumsal ITSM L1 asistanısın. Kullanıcı aynı olayda itiraz/ek bilgi verdi.\n"
+        "KURALLAR:\n"
+        "1. İlk sorunu ve senin önceki çözümünü unutma; sıfırdan başlama.\n"
+        "2. Kullanıcının yeni itirazını (ör. adımı yaptım ama hata sürüyor) doğrudan yanıtla.\n"
+        "3. Aynı 3 adımı kopyalama; bir sonraki tanı adımlarını yaz.\n"
+        "4. Türkçe markdown, tam 3 numaralı adım.\n"
+        "5. Son: 'Hâlâ olmazsa talep aç diyerek kayıt oluşturabilirsiniz.'\n"
+        f"{sap_extra}"
+    )
+    prompt = f"""
+Sınıf: {path or "—"}
+
+Sohbet:
+{chr(10).join(thread_lines)}
+
+Benzer çözülmüş kayıtlar:
+{chr(10).join(context_blocks) or "—"}
+
+Bilgi bankası:
+{kb_hint or "—"}
+
+Önceki tavsiyeyi temel alarak kullanıcının itirazına cevap ver.
+""".strip()
+    return generate_llm_response(prompt, system_prompt=sys_prompt)
+
+
+def answer_from_model_knowledge(user_text: str, classification: dict | None = None) -> str | None:
+    """When Chroma has no match, answer from the model's own knowledge (NVIDIA API)."""
+    if not is_llm_active():
+        return None
+
+    classed = classification or {}
+    path = str(classed.get("path_label") or "").strip()
+    modul = str(classed.get("modul_label") or classed.get("modul") or "").strip()
+    surec = str(classed.get("surec_label") or classed.get("surec") or "").strip()
+    sap_hint = ""
+    if str(classed.get("birim") or "") == "sap_erp" or "sap" in (user_text or "").lower():
+        sap_hint = (
+            "Konu SAP (FI, MM, Basis, SD vb.) olabilir. İşlem kodu, şirket kodu, "
+            "malzeme, dump veya hata metnine göre pratik L1 adımlar öner. "
+            "Emin olmadığın yapılandırma değişikliklerini danışmana bırak."
+        )
+
+    sys_prompt = (
+        "Sen kurumsal ITSM L1 asistanısın. Vektör veritabanında bu sorun için "
+        "çözülmüş kayıt yok; kendi genel bilginle yardımcı ol.\n"
+        "KURALLAR:\n"
+        "1. Türkçe yaz, markdown kullan.\n"
+        "2. 1-2 cümle empati, sonra tam 3 numaralandırılmış adım.\n"
+        "3. Uydurma belge numarası veya kurum içi gizli bilgi üretme.\n"
+        "4. Son cümle: 'Bu adımlar yetmezse talep aç diyerek kayıt oluşturabilirsiniz.'\n"
+        f"{sap_hint}"
+    )
+    prompt = (
+        f"Kullanıcı sorunu:\n\"{user_text}\"\n\n"
+        f"Sınıflandırma (belirsiz olabilir): {path or '—'}\n"
+        f"Modül: {modul or '—'}\n"
+        f"Süreç: {surec or '—'}\n\n"
+        "Kendi bilginle 3 adımlık çözüm yaz."
+    )
     return generate_llm_response(prompt, system_prompt=sys_prompt)
 
 

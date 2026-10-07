@@ -126,6 +126,10 @@ def _score(text: str, row: dict) -> int:
         score += 3
     if "mm" in lowered and str(row.get("modul") or "") == "sap_mm":
         score += 4
+    if "fi" in lowered and str(row.get("modul") or "") == "sap_fi":
+        score += 4
+    if "basis" in lowered and str(row.get("modul") or "") == "sap_basis":
+        score += 4
     if any(token in lowered for token in ("karakter", "mecburi", "maximum", "max ")):
         if "karakter" in " ".join(keywords) or "field" in " ".join(keywords):
             score += 5
@@ -135,17 +139,18 @@ def _score(text: str, row: dict) -> int:
 def find_solutions(text: str, *, birim: str = "", surec: str = "", limit: int = 2) -> list[dict]:
     all_solutions = load_solutions()
     
-    # 1. Exact match by surec
+    # BERT / NLU sürecine kilitlen: metin anahtar kelimesiyle başka sınıfa kayma.
     if surec:
         surec_norm = fold_tr(surec)
         exact_matches = [
             row for row in all_solutions
-            if row.get("surec") == surec or fold_tr(row.get("surec", "")) == surec_norm or fold_tr(row.get("surec_label", "")) == surec_norm
+            if row.get("surec") == surec
+            or fold_tr(str(row.get("surec") or "")) == surec_norm
+            or fold_tr(str(row.get("surec_label") or "")) == surec_norm
         ]
-        if exact_matches:
-            return exact_matches[:limit]
+        return exact_matches[:limit]
 
-    # 2. Ranked match by text keywords & unit
+    # Süreç yoksa (model kapalı) metin skoru.
     ranked: list[tuple[int, dict]] = []
     for row in all_solutions:
         score = _score(text, row)
@@ -219,7 +224,7 @@ def format_solution(row: dict, user_text: str = "") -> str:
     ai_insight = synthesize_solution_explanation(user_text, row)
     return (
         f"**💡 {title}**\n"
-        f"*{ai_insight}*\n\n"
+        f"*Sınıflandırıcının seçtiği sürece bilgi bankasından eşleşen kayıt.* {ai_insight}\n\n"
         f"**Önerilen Çözüm Adımları:**\n{body}\n\n"
         f"*(Kayıt No: `{sid}` · {rating_badge}{self_service})*"
     )

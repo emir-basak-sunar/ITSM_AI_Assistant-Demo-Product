@@ -128,12 +128,6 @@ def create_ticket(
         "resolved_at": "",
     }
     saved = save_ticket(ticket)
-    try:
-        from ticket_rag import invalidate_index
-
-        invalidate_index()
-    except Exception:
-        pass
     return saved
 
 
@@ -160,12 +154,13 @@ def append_followup(ticket_id: str, text: str) -> dict | None:
     if updated is None:
         return None
     _rewrite(tickets)
-    try:
-        from ticket_rag import invalidate_index
+    if updated and str(updated.get("status") or "") == "resolved":
+        try:
+            from vector_store import index_resolved_ticket
 
-        invalidate_index()
-    except Exception:
-        pass
+            index_resolved_ticket(updated)
+        except Exception:
+            pass
     return updated
 
 
@@ -186,23 +181,33 @@ def update_status(
             ticket["status"] = status
             if status == "resolved":
                 ticket["resolved_at"] = stamp
-                summary = (resolution_summary or ticket.get("recommended_next_step") or "").strip()
-                if summary:
-                    ticket["resolution_summary"] = summary
-                    messages = list(ticket.get("messages") or [])
-                    messages.append({"role": "agent", "content": summary, "at": stamp})
-                    ticket["messages"] = messages
+                summary = (
+                    resolution_summary
+                    or ticket.get("recommended_next_step")
+                    or ""
+                ).strip()
+                if not summary:
+                    ask = str(ticket.get("customer_ask") or "").strip()
+                    summary = (
+                        "Helpdesk tarafından çözüldü olarak işaretlendi."
+                        + (f" Sorun: {ask}" if ask else "")
+                    )
+                ticket["resolution_summary"] = summary
+                messages = list(ticket.get("messages") or [])
+                messages.append({"role": "agent", "content": summary, "at": stamp})
+                ticket["messages"] = messages
             updated = ticket
             break
     if updated is None:
         return None
     _rewrite(tickets)
-    try:
-        from ticket_rag import invalidate_index
+    if status == "resolved":
+        try:
+            from vector_store import index_resolved_ticket
 
-        invalidate_index()
-    except Exception:
-        pass
+            index_resolved_ticket(updated)
+        except Exception:
+            pass
     return updated
 
 

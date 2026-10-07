@@ -57,3 +57,19 @@ data/report_jobs.jsonl
 data/users.jsonl
 data/sessions.json
 data/chroma_store/
+
+# ==============================================================================
+# Trained models (BERT weights şişiriyor; GitHub'a gitmesin)
+# Yerelde kalır: models/bert_model, joblib NLU, Chroma zaten yukarıda.
+# ==============================================================================
+models/bert_model/
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.pt
+models/**/*.pth
+models/**/*.onnx
+models/**/*.joblib
+models2/
+*.safetensors
+huggingface/
+.cache/

@@ -67,9 +67,16 @@ SAP_MODULE_ALIASES: dict[str, dict[str, str]] = {
         "surec": "sap_ps_destek",
         "surec_label": "PS Genel Destek",
     },
+    "basis": {
+        "modul": "sap_basis",
+        "modul_label": "Basis — Sistem Yönetimi",
+        "surec": "sap_basis_destek",
+        "surec_label": "Basis Genel Destek",
+    },
 }
 
 MODULE_PATTERNS = [
+    (re.compile(r"\bbasis\b|\bstms\b|\bst22\b|\bsm21\b|\bsm59\b|\bsm12\b|\bsp01\b|\btransport\b|\btasima\b|\brfc\b|\bsapgui\b", re.I), "basis"),
     (re.compile(r"\bmm\b|\bmm\s*modul|\bmalzeme\s*yonetim", re.I), "mm"),
     (re.compile(r"\bfi\b|\bfinans\b|\bmuhasebe\b", re.I), "fi"),
     (re.compile(r"\bsd\b|\bsatis\b|\bdagitim\b", re.I), "sd"),
@@ -97,7 +104,17 @@ REFUSE_CLARIFY_PHRASES = (
 
 def is_sap_context(text: str) -> bool:
     lowered = fold_tr(text)
-    return "sap" in lowered or "erp" in lowered or bool(re.search(r"\b(tcode|transaction|me21n|migo|mm0|fb50)\b", lowered))
+    return (
+        "sap" in lowered
+        or "erp" in lowered
+        or "basis" in lowered
+        or bool(
+            re.search(
+                r"\b(tcode|transaction|me21n|migo|mm0|fb50|stms|st22|sm21|sm59|ob52)\b",
+                lowered,
+            )
+        )
+    )
 
 
 def detect_sap_module(text: str) -> str | None:

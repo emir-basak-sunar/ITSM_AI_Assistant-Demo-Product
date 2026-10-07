@@ -108,10 +108,17 @@ def health() -> dict[str, Any]:
         vector_store = store_stats(refresh=False)
     except Exception as exc:
         vector_store = {"engine": "chromadb", "error": str(exc)}
+    try:
+        from itsm_nlu import nlu_backend
+
+        nlu = nlu_backend()
+    except Exception as exc:
+        nlu = f"error:{exc}"
     return {
         "status": "ok",
         "llm_active": is_llm_active(),
         "llm_provider": llm_provider_label(),
+        "nlu_backend": nlu,
         "vector_store": vector_store,
     }
 
@@ -195,9 +202,14 @@ def list_tickets(_: dict[str, str] = Depends(_require_auth)) -> list[dict]:
 def patch_ticket_status(
     ticket_id: str,
     status: str,
+    resolution_summary: str = "",
     _: dict[str, str] = Depends(_require_auth),
 ) -> dict[str, Any]:
-    updated = update_status(ticket_id, status)
+    updated = update_status(
+        ticket_id,
+        status,
+        resolution_summary=resolution_summary,
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Bilet bulunamadı.")
     return updated

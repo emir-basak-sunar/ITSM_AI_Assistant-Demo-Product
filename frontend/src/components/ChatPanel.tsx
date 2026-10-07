@@ -56,6 +56,7 @@ export function ChatPanel() {
         slots: session.slots,
         classification: session.classification as Record<string, unknown> | null,
       });
+      const nluSource = String(result.debug?.nlu_source || "");
       const meta = result.classification?.path_label ?? undefined;
       setMessages((prev) => [
         ...prev,
@@ -63,6 +64,7 @@ export function ChatPanel() {
           role: "assistant",
           content: result.reply,
           meta,
+          nluSource: nluSource || undefined,
           priority: result.classification?.priority,
           similarTickets: result.similar_tickets?.length ? result.similar_tickets : undefined,
         },
@@ -142,6 +144,11 @@ export function ChatPanel() {
                   </div>
                   {message.meta ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {message.nluSource === "bert" ? (
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
+                          BERT
+                        </span>
+                      ) : null}
                       <span className="text-xs text-slate-400">{message.meta}</span>
                       {"priority" in message && message.priority ? (
                         <Badge variant={priorityVariant(String(message.priority))}>

@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from dialogue import (
+    looks_like_followup_question,
+    looks_like_slot_reply,
+    looks_like_troubleshooting_continue,
+    resolve_classification,
+    same_unit,
+)
 from intents import detect_intents, looks_confirm, looks_decline, rejects_classification
 from reports import looks_report_command, queue_report_job
 from rules import force_ticket
@@ -87,7 +94,7 @@ def _merge_class(previous: dict | None, incoming: dict) -> dict:
 
 def _debug(classification: dict, sentiment: dict, action: str, extra: dict | None = None) -> dict:
     source = classification.get("source") or "none"
-    if source == "model":
+    if source in {"bert", "sklearn", "model"}:
         confidence = float(classification.get("model_confidence") or 0.0)
     else:
         confidence = min(1.0, (classification.get("score") or 0) / 4)
@@ -201,16 +208,77 @@ def _ticket_reply(ticket: dict) -> str:
     )
 
 
-def _rag_answer(user_text: str, similar: list[dict], hits: list[dict]) -> str | None:
+def _conversation_blob(history: list[dict] | None, text: str) -> str:
+    parts: list[str] = []
+    for message in (history or [])[-8:]:
+        content = str(message.get("content") or "").strip()
+        if content:
+            parts.append(content)
+    if text.strip():
+        parts.append(text.strip())
+    return "\n".join(parts)
+
+
+def _knowledge_answer(user_text: str, classification: dict | None = None) -> str | None:
+    """RAG boşsa NVIDIA API kendi bilgisiyle cevap üretir."""
+    try:
+        from llm_engine import answer_from_model_knowledge, is_llm_active
+
+        if not is_llm_active():
+            return None
+        text = answer_from_model_knowledge(user_text, classification or {})
+        if not text:
+            return None
+        return f"**LLM (Nemotron · kendi bilgisi):**\n\n{text}"
+    except Exception as exc:
+        print(f"[llm-knowledge] {exc}")
+        return None
+
+
+def _rag_answer(
+    user_text: str,
+    similar: list[dict],
+    hits: list[dict],
+    *,
+    history: list[dict] | None = None,
+    followup: bool = False,
+    classification: dict | None = None,
+) -> str | None:
+    """BERT süreciyle süzülmüş Chroma kayıtları + Nemotron (yoksa şablon)."""
     kb = hits[0] if hits else None
     try:
-        from llm_engine import fallback_answer_from_resolved_tickets, synthesize_from_resolved_tickets
+        from llm_engine import (
+            fallback_answer_from_resolved_tickets,
+            is_llm_active,
+            synthesize_followup_troubleshooting,
+            synthesize_from_resolved_tickets,
+        )
 
-        llm_text = synthesize_from_resolved_tickets(user_text, similar, kb_solution=kb)
-        if llm_text:
-            return llm_text
-        return fallback_answer_from_resolved_tickets(user_text, similar) or None
-    except Exception:
+        if followup and is_llm_active():
+            llm_text = synthesize_followup_troubleshooting(
+                user_text,
+                history or [],
+                similar_tickets=similar,
+                kb_solution=kb,
+                classification=classification,
+            )
+            if llm_text:
+                return f"**Takip (Nemotron):**\n\n{llm_text}"
+        if similar and is_llm_active():
+            llm_text = synthesize_from_resolved_tickets(
+                user_text, similar, kb_solution=kb
+            )
+            if llm_text:
+                return f"**RAG (Nemotron · çözülmüş kayıtlar):**\n\n{llm_text}"
+        if followup:
+            knowledge = _knowledge_answer(user_text, classification)
+            if knowledge:
+                return knowledge
+        if similar:
+            return fallback_answer_from_resolved_tickets(user_text, similar) or None
+        return None
+    except Exception as exc:
+        print(f"[rag] {exc}")
         return None
 
 
@@ -219,33 +287,103 @@ def _suggest_reply(
     hits: list[dict],
     user_text: str = "",
     similar_tickets: list[dict] | None = None,
+    *,
+    history: list[dict] | None = None,
+    followup: bool = False,
 ) -> str:
     path = path_line(classification)
-    blocks = [f"🔍 **Talebinizi şöyle sınıflandırdım:** {path}"]
+    source = str(classification.get("source") or "")
+    conf = float(classification.get("model_confidence") or 0.0)
+    if followup:
+        header = (
+            f"🔄 **Aynı olaydayız:** {path}  \n"
+            "Önceki çözümü ve yeni itirazınızı birlikte ele alıyorum."
+        )
+    elif source in {"bert", "sklearn", "model"} and conf:
+        header = (
+            f"🔍 **BERT sınıflandırması:** {path}  \n"
+            f"*(Süreç Chroma filtresi olarak kullanıldı.)*"
+        )
+    else:
+        header = f"🔍 **Talebinizi şöyle sınıflandırdım:** {path}"
+    blocks = [header]
     similar = similar_tickets or []
 
-    if similar:
+    rag_text = _rag_answer(
+        user_text,
+        similar,
+        hits,
+        history=history,
+        followup=followup,
+        classification=classification,
+    )
+    if rag_text:
+        blocks.append(rag_text)
+    else:
+        knowledge = _knowledge_answer(user_text, classification)
+        if knowledge:
+            blocks.append(knowledge)
+        elif hits:
+            for row in hits:
+                blocks.append(format_solution(row, user_text=user_text))
+        else:
+            blocks.append(
+                "Bu süreç için hazır çözüm veya benzer kayıt bulunamadı. "
+                "İlgili birime bilet oluşturmamı ister misiniz?"
+            )
+
+    if similar and not followup:
         top = similar[0]
         ticket = top.get("ticket") if isinstance(top.get("ticket"), dict) else top
         pct = top.get("similarity_pct") or round(float(top.get("score", 0)) * 100)
         blocks.append(
-            f"📎 **Benzer çözülmüş kayıt:** `{ticket.get('id', '—')}` "
-            f"(%{pct} benzerlik) — mesajlaşma geçmişi sohbet panelinde gösteriliyor."
-        )
-        rag_text = _rag_answer(user_text, similar, hits)
-        if rag_text:
-            blocks.append(f"**🧠 Geçmiş kayıtlara dayalı öneri:**\n\n{rag_text}")
-        elif hits:
-            for row in hits:
-                blocks.append(format_solution(row, user_text=user_text))
-    elif hits:
-        for row in hits:
-            blocks.append(format_solution(row, user_text=user_text))
-    else:
-        blocks.append(
-            "Bu süreç için hazır bir self-service çözüm kaydı bulunamadı. İlgili birime bilet oluşturmamı ister misiniz?"
+            f"📎 **Kaynak kayıt:** `{ticket.get('id', '—')}` (%{pct} benzerlik)"
         )
     return "\n\n".join(blocks)
+
+
+def _continue_solution_turn(
+    *,
+    text: str,
+    history: list[dict],
+    classed: dict,
+    sentiment: dict,
+    current_slots: dict,
+    surec_key: str,
+    last_rule_id: str | None,
+) -> TurnResult:
+    query = _conversation_blob(history, text)
+    hits = find_solutions(
+        query,
+        birim=str(classed.get("birim") or ""),
+        surec=surec_key,
+    )
+    similar_raw = find_similar_resolved_tickets(
+        query,
+        surec=surec_key,
+        birim=str(classed.get("birim") or ""),
+        limit=2,
+    )
+    similar_payload = [format_similar_ticket_payload(match) for match in similar_raw]
+    solution_ids = [str(h.get("id")) for h in hits if h.get("id")]
+    sid = solution_ids[0] if solution_ids else last_rule_id
+    debug = _debug(classed, sentiment, "suggest_solution", {"followup": True})
+    return TurnResult(
+        reply=_suggest_reply(
+            classed,
+            hits,
+            user_text=text,
+            similar_tickets=similar_raw,
+            history=history,
+            followup=True,
+        ),
+        phase="suggest_solution",
+        last_rule_id=sid,
+        debug=debug,
+        slots=current_slots,
+        classification=classed,
+        similar_tickets=similar_payload,
+    )
 
 
 def _collect_or_open(
@@ -332,17 +470,35 @@ def handle_turn(
         if message.get("role") == "user"
     )
     full_context = " ".join(part for part in (prior, text) if part)
-    incoming = classify_request(full_context)
+    incoming_full = classify_request(full_context)
+    incoming_turn = classify_request(text)
     user_rejects = rejects_classification(text, classification)
+    classed = resolve_classification(
+        text=text,
+        phase=phase,
+        previous=classification,
+        incoming_full=incoming_full,
+        incoming_turn=incoming_turn,
+        user_rejects=user_rejects,
+    )
     if (
         phase == "collect_fields"
         and classification
         and not classification.get("unclear")
         and not user_rejects
+        and not looks_like_followup_question(text)
+        and not looks_like_slot_reply(text)
     ):
         classed = classification
-    else:
-        classed = _merge_class(classification, incoming)
+    if (
+        looks_like_followup_question(text)
+        and classification
+        and not classification.get("unclear")
+        and incoming_turn
+        and not incoming_turn.get("unclear")
+        and not same_unit(classification, incoming_turn)
+    ):
+        classed = incoming_turn
     if classed and not classed.get("unclear"):
         classed = dict(classed)
         classed["priority"] = infer_priority(
@@ -352,7 +508,10 @@ def handle_turn(
             sentiment=sentiment["label"],
         )
     
+    prev_surec = str((classification or {}).get("surec") or "")
     surec_key = str(classed.get("surec") or "")
+    if prev_surec and prev_surec != surec_key:
+        slots = {}
     req_fields = get_required_fields_for_surec(surec_key)
     current_slots = merge_slots(slots, None, req_fields)
     solution_ids = [last_rule_id] if last_rule_id and str(last_rule_id).startswith("S-") else []
@@ -456,10 +615,44 @@ def handle_turn(
                 why="Kullanıcı çözüm önerisinden sonra ticket talep etti veya sorun devam etti.",
             )
             return _with_llm_reply(result, text)
+        if looks_like_slot_reply(text):
+            extracted = extract_slots(text, req_fields)
+            if not any(str(v).strip() for v in extracted.values()):
+                missing = missing_fields(current_slots, req_fields)
+                if missing:
+                    current_slots = apply_answer(current_slots, missing[0], text, req_fields)
+            result = _collect_or_open(
+                text=text,
+                history=history,
+                classification=classed,
+                sentiment=sentiment,
+                slots=current_slots,
+                customer_email=owner,
+                solution_ids=solution_ids,
+                why="Kullanıcı çözüm sonrası eksik alanları dolduruyor.",
+            )
+            return _with_llm_reply(result, text)
+        if looks_like_followup_question(text) or looks_like_troubleshooting_continue(text):
+            return _with_llm_reply(
+                _continue_solution_turn(
+                    text=text,
+                    history=history,
+                    classed=classed,
+                    sentiment=sentiment,
+                    current_slots=current_slots,
+                    surec_key=surec_key,
+                    last_rule_id=last_rule_id,
+                ),
+                text,
+            )
         debug = _debug(classed, sentiment, "suggest_wait")
         return _with_llm_reply(
             TurnResult(
-                reply="Önerilen adımlar işe yaradıysa belirtebilirsiniz. Destek ekibine kayıt açılması için **“talep aç”** demeniz yeterlidir.",
+                reply=(
+                    "Aynı kayıt üzerindeyiz. Adımlar işe yaradıysa yazın; "
+                    "kayıt açmamı isterseniz **talep aç** demeniz yeterli. "
+                    "Farklı bir konuysa kısaca yeni talebinizi yazın."
+                ),
                 phase="suggest_solution",
                 last_rule_id=last_rule_id,
                 debug=debug,
@@ -541,11 +734,30 @@ def handle_turn(
                 birim=str(classed.get("birim") or ""),
                 surec=str(classed.get("surec") or ""),
             )
+            similar_probe = find_similar_resolved_tickets(full_context, limit=2)
             if probe_hits:
                 classed = classification_from_solution(probe_hits[0])
                 surec_key = str(classed.get("surec") or "")
                 req_fields = get_required_fields_for_surec(surec_key)
+            elif similar_probe:
+                ticket = similar_probe[0].get("ticket") if isinstance(similar_probe[0], dict) else {}
+                if not isinstance(ticket, dict):
+                    ticket = similar_probe[0]
+                classed = classification_from_solution(ticket)
+                surec_key = str(classed.get("surec") or "")
+                req_fields = get_required_fields_for_surec(surec_key)
             else:
+                knowledge = _knowledge_answer(text, incoming)
+                if knowledge:
+                    debug = _debug(classed, sentiment, "suggest_solution", {"llm_knowledge": True})
+                    return TurnResult(
+                        reply=knowledge,
+                        phase="suggest_solution",
+                        last_rule_id=None,
+                        debug=debug,
+                        slots=merge_slots(current_slots, extract_slots(text, req_fields), req_fields),
+                        classification=classed,
+                    )
                 debug = _debug(classed, sentiment, "clarify")
                 hint = str(classed.get("clarify_hint") or "").strip()
                 if not hint:
@@ -571,11 +783,30 @@ def handle_turn(
     current_slots = merge_slots(current_slots, extract_slots(text, req_fields), req_fields)
     if classed.get("unclear") and not intents["open_ticket"]:
         probe_hits = find_solutions(full_context)
+        similar_probe = find_similar_resolved_tickets(full_context, limit=2)
         if probe_hits:
             classed = classification_from_solution(probe_hits[0])
             surec_key = str(classed.get("surec") or "")
             req_fields = get_required_fields_for_surec(surec_key)
+        elif similar_probe:
+            ticket = similar_probe[0].get("ticket") if isinstance(similar_probe[0], dict) else {}
+            if not isinstance(ticket, dict):
+                ticket = similar_probe[0]
+            classed = classification_from_solution(ticket)
+            surec_key = str(classed.get("surec") or "")
+            req_fields = get_required_fields_for_surec(surec_key)
         elif not user_refuses_clarify(text):
+            knowledge = _knowledge_answer(text, classed)
+            if knowledge:
+                debug = _debug(classed, sentiment, "suggest_solution", {"llm_knowledge": True})
+                return TurnResult(
+                    reply=knowledge,
+                    phase="suggest_solution",
+                    last_rule_id=None,
+                    debug=debug,
+                    slots=current_slots,
+                    classification=classed,
+                )
             debug = _debug(classed, sentiment, "clarify")
             hint = str(classed.get("clarify_hint") or "").strip()
             if not hint:

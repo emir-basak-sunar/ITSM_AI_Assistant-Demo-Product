@@ -14,6 +14,7 @@ export function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState("Tümü");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Ticket | null>(null);
+  const [resolutionNote, setResolutionNote] = useState("");
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -47,11 +48,17 @@ export function TicketsPage() {
 
   async function resolve(id: string) {
     if (!token) return;
+    const note = resolutionNote.trim();
+    if (note.length < 8) {
+      window.alert("Çözümü vektör veritabanına yazmak için en az birkaç cümle yazın.");
+      return;
+    }
     setBusy(true);
     try {
-      await api.resolveTicket(token, id);
+      await api.resolveTicket(token, id, note);
       await refresh();
       setSelected(null);
+      setResolutionNote("");
     } finally {
       setBusy(false);
     }
@@ -93,7 +100,7 @@ export function TicketsPage() {
             value={unitFilter}
             onChange={(e) => setUnitFilter(e.target.value)}
           >
-            {["Tümü", "Bilgi Teknolojileri", "İdari İşler", "İnsan Kaynakları", "Finans"].map(
+            {["Tümü", "Bilgi Teknolojileri", "İdari İşler", "İnsan Kaynakları", "Finans", "SAP ERP"].map(
               (u) => (
                 <option key={u}>{u}</option>
               ),
@@ -152,7 +159,10 @@ export function TicketsPage() {
                   <tr
                     key={ticket.id}
                     className="cursor-pointer transition hover:bg-slate-50"
-                    onClick={() => setSelected(ticket)}
+                    onClick={() => {
+                      setSelected(ticket);
+                      setResolutionNote("");
+                    }}
                   >
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold text-brand-600">
                       {ticket.id}
@@ -250,16 +260,37 @@ export function TicketsPage() {
                   </dl>
                 </div>
               ) : null}
+              {selected.resolution_summary ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Kayıtlı çözüm
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">{selected.resolution_summary}</p>
+                </div>
+              ) : null}
               {selected.status !== "resolved" ? (
-                <button
-                  type="button"
-                  className="btn-primary w-full"
-                  disabled={busy}
-                  onClick={() => void resolve(selected.id)}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Çözüldü Olarak İşaretle
-                </button>
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Çözüm (Chroma’ya yazılır)
+                    </span>
+                    <textarea
+                      className="input-field mt-1 min-h-[96px] w-full text-sm"
+                      placeholder="Sorunun nasıl çözüldüğünü yazın. Bu metin sonraki benzer talepler için vektör veritabanına kaydedilir."
+                      value={resolutionNote}
+                      onChange={(e) => setResolutionNote(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-primary w-full"
+                    disabled={busy}
+                    onClick={() => void resolve(selected.id)}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Çözüldü Olarak İşaretle
+                  </button>
+                </div>
               ) : null}
             </div>
           </div>

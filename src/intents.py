@@ -62,6 +62,9 @@ def _hits(text: str, phrases: tuple[str, ...]) -> list[str]:
 
 
 def looks_confirm(text: str) -> bool:
+    raw = (text or "").strip()
+    if len(raw) > 40:
+        return False
     return bool(_hits(text, CONFIRM_PHRASES))
 
 
